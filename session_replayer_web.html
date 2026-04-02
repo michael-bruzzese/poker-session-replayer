@@ -1462,7 +1462,9 @@
     }
 
     // Nav buttons
-    els.btnNextStep.disabled = !(inScript && playback.currentStepIndex < playback.totalSteps - 1);
+    const canAdvanceStep = inScript && playback.currentStepIndex < playback.totalSteps - 1;
+    const canAdvanceHand = inScript && playback.currentStreet === "showdown" && playback.currentHandIndex < session.hands.length - 1;
+    els.btnNextStep.disabled = !(canAdvanceStep || canAdvanceHand);
     els.btnPrevStep.disabled = !(inScript && playback.currentStepIndex >= 0);
     els.btnNextHand.disabled = !(hasSession && playback.currentHandIndex < session.hands.length - 1);
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
@@ -1935,6 +1937,14 @@
   function nextStep() {
     if (playback.mode !== "script") return;
     if (stepAnimating) return;
+
+    // If hand is complete, advance to next hand
+    if (playback.currentStreet === "showdown") {
+      if (playback.currentHandIndex < session.hands.length - 1) {
+        loadHand(playback.currentHandIndex + 1);
+      }
+      return;
+    }
 
     if (playback.currentStepIndex >= playback.totalSteps - 1) {
       stepAnimating = true;
