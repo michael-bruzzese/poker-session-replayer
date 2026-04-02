@@ -183,7 +183,7 @@
   /* ---- Pot Display ---- */
   .pot-display {
     position: absolute;
-    top: 16%;
+    top: 62%;
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
@@ -221,7 +221,7 @@
   /* ---- Board Cards ---- */
   .board-cards {
     position: absolute;
-    top: 48%;
+    top: 40%;
     left: 50%;
     transform: translate(-50%, -50%);
     display: flex;
@@ -564,15 +564,15 @@
   }
 
   /* 9-seat positions (percentages of felt) */
-  .seat[data-visual="bottom-center"] { left: 50%; top: 97%; }
-  .seat[data-visual="bottom-left"]   { left: 22%; top: 90%; }
-  .seat[data-visual="mid-left"]      { left: 4%;  top: 58%; }
-  .seat[data-visual="top-left"]      { left: 10%; top: 22%; }
-  .seat[data-visual="top-left-center"]  { left: 32%; top: 5%; }
-  .seat[data-visual="top-center"]    { left: 50%; top: 2%; }
-  .seat[data-visual="top-right-center"] { left: 68%; top: 5%; }
-  .seat[data-visual="top-right"]     { left: 90%; top: 22%; }
-  .seat[data-visual="mid-right"]     { left: 96%; top: 58%; }
+  .seat[data-visual="bottom-center"] { left: 50%; top: 102%; }
+  .seat[data-visual="bottom-left"]   { left: 19%; top: 95%; }
+  .seat[data-visual="mid-left"]      { left: -1%; top: 58%; }
+  .seat[data-visual="top-left"]      { left: 5%;  top: 18%; }
+  .seat[data-visual="top-left-center"]  { left: 30%; top: 0%; }
+  .seat[data-visual="top-center"]    { left: 50%; top: -3%; }
+  .seat[data-visual="top-right-center"] { left: 70%; top: 0%; }
+  .seat[data-visual="top-right"]     { left: 95%; top: 18%; }
+  .seat[data-visual="mid-right"]     { left: 101%; top: 58%; }
 
   /* ---- Status Bar ---- */
   .status-bar {
@@ -3934,7 +3934,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       return;
     }
     const potX = feltRect.width / 2;
-    const potY = feltRect.height * 0.22;
+    const potY = feltRect.height * 0.62;
 
     // Animate all chips to pot center
     chipEls.forEach((el) => {
