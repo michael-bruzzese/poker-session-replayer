@@ -431,10 +431,11 @@
     left: 50%;
     transform: translate(-50%, -50%) scale(0.6);
     z-index: 25;
-    font-size: 48px;
+    font-size: 36px;
     font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 6px;
+    letter-spacing: 3px;
+    max-width: 80%;
+    text-align: center;
     color: #fff;
     text-shadow: 0 4px 12px rgba(0,0,0,0.7);
     opacity: 0;
@@ -565,6 +566,17 @@
     cursor: pointer;
   }
   .branch-entry-btn:hover { border-color: #fa5; color: #fa5; }
+
+  /* New Turn / New River buttons */
+  .nav-btn.new-card-btn {
+    background: #1a5a8a;
+    border-color: #2a7abb;
+    color: #adf;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 20px;
+  }
+  .nav-btn.new-card-btn:hover { background: #2a6a9a; box-shadow: 0 0 10px rgba(42,122,187,0.4); }
 
   /* Committed chips in front of a seat */
   .seat-bet-chips {
@@ -917,6 +929,7 @@
     <div style="display:flex; gap:12px; margin-top:12px;">
       <button id="qaSubmitBtn" class="demo-btn">Submit</button>
       <button id="qaSkipBtn" class="demo-btn" style="background:#555">Skip</button>
+      <button id="qaRemoveHandBtn" class="demo-btn" style="background:#922; font-size:12px;">Remove This Hand</button>
       <button id="qaSkipAllBtn" class="demo-btn" style="background:#444; font-size:12px;">Skip All & Load</button>
     </div>
   </div>
@@ -1098,8 +1111,8 @@
           <button id="btnPrevStep" class="nav-btn" disabled>&lt;&lt; Prev</button>
           <button id="btnNextStep" class="nav-btn primary" disabled>Next &gt;&gt;</button>
           <button id="btnBackToScript" class="nav-btn warning" style="display:none">Back to Script</button>
-          <button id="btnNewTurn" class="nav-btn" style="display:none">New Turn</button>
-          <button id="btnNewRiver" class="nav-btn" style="display:none">New River</button>
+          <button id="btnNewTurn" class="nav-btn new-card-btn" style="display:none">New Turn</button>
+          <button id="btnNewRiver" class="nav-btn new-card-btn" style="display:none">New River</button>
           <button id="btnPrevHand" class="nav-btn" disabled>&lt; Hand</button>
           <button id="btnNextHand" class="nav-btn" disabled>Hand &gt;</button>
         </div>
@@ -2205,6 +2218,43 @@ const HoldemValidator = (() => {
     const seatCommitted = {}; // track each seat's street commitment
     const seatsActed = new Set();
     const bigBlind = (hand.blinds || {}).big || 10;
+
+    // ---- Preflop action order validation ----
+    // First actor preflop should be UTG (seat after BB), not SB or BB
+    if (street === "preflop" && actions.length > 0) {
+      const firstActor = actions[0];
+      if (firstActor.position === "BB") {
+        errors.push({
+          severity: "error",
+          field: `${street}.actions[0]`,
+          message: `BB acts first preflop — UTG should act first`,
+          question: `Hand ${hid}, preflop: The big blind is listed as acting first. Preflop action starts with UTG (under the gun), not BB. Is the action order correct?`
+        });
+      } else if (firstActor.position === "SB") {
+        errors.push({
+          severity: "error",
+          field: `${street}.actions[0]`,
+          message: `SB acts first preflop — UTG should act first`,
+          question: `Hand ${hid}, preflop: The small blind is listed as acting first. Preflop action starts with UTG, then continues clockwise to the blinds. Is the action order correct?`
+        });
+      }
+    }
+
+    // ---- Postflop action order validation ----
+    // First actor postflop should be earliest position still in hand (SB first, then BB, etc.)
+    if (street !== "preflop" && actions.length > 0) {
+      const firstActor = actions[0];
+      const btnSeat = hand.button_seat;
+      // The first actor should NOT be the button (last to act postflop) unless heads-up IP
+      if (firstActor.position === "BTN" && actions.length > 1) {
+        errors.push({
+          severity: "warning",
+          field: `${street}.actions[0]`,
+          message: `Button acts first on ${street} — typically the earliest position acts first postflop`,
+          question: `Hand ${hid}, ${street}: The button is listed as acting first. Usually the earliest position (SB/BB/UTG etc.) acts first after the flop. Is this correct?`
+        });
+      }
+    }
 
     // Track preflop blind commitments
     if (street === "preflop") {
@@ -3443,6 +3493,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     qaInput: document.getElementById("qaInput"),
     qaSubmitBtn: document.getElementById("qaSubmitBtn"),
     qaSkipBtn: document.getElementById("qaSkipBtn"),
+    qaRemoveHandBtn: document.getElementById("qaRemoveHandBtn"),
     qaSkipAllBtn: document.getElementById("qaSkipAllBtn"),
     qaFinishBtn: document.getElementById("qaFinishBtn"),
     reviewScreen: document.getElementById("reviewScreen"),
@@ -3822,11 +3873,11 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
     els.btnBackToScript.style.display = inBranch ? "" : "none";
 
-    // New Turn / New River buttons — show when on the right street
+    // New Turn / New River — show on relevant streets. Repeatable in branch mode.
     const onFlop = playback.currentStreet === "flop";
     const onTurn = playback.currentStreet === "turn";
-    els.btnNewTurn.style.display = onFlop ? "" : "none";
-    els.btnNewRiver.style.display = onTurn ? "" : "none";
+    els.btnNewTurn.style.display = (onFlop || (onTurn && inBranch)) ? "" : "none";
+    els.btnNewRiver.style.display = (onTurn || (playback.currentStreet === "river" && inBranch)) ? "" : "none";
 
     // Script mode acting prompt: show upcoming action hint
     if (inScript && !inBranch) {
@@ -4318,7 +4369,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
         clearStreetCallouts();
         playback.currentStreet = "showdown";
         playback.tableState.actionSeat = -1;
-        showStreetBanner("SHOWDOWN");
+        showHandResult();
         render();
         stepAnimating = false;
       });
@@ -4389,6 +4440,39 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   // ---- Street Banner ----
 
   let streetBannerTimer = 0;
+
+  function showHandResult() {
+    const hand = session.hands[playback.currentHandIndex];
+    const result = hand ? hand.result : null;
+    const playersInHand = playback.players.filter(p => p.status !== "folded");
+    const isRealShowdown = playersInHand.length >= 2 && playback.currentStreet === "showdown";
+
+    if (isRealShowdown && result && result.showdown) {
+      // Actual showdown — 2+ players show cards
+      const pot = result.pot || playback.tableState.pot || "?";
+      showStreetBanner("SHOWDOWN");
+      // After showdown banner fades, show result
+      setTimeout(() => {
+        const winnerSeat = result.winner_seat ? (result.winner_seat - 1) : -1;
+        const winner = winnerSeat >= 0 ? PE.getPlayerBySeat(playback.players, winnerSeat) : null;
+        const winnerName = winner ? winner.name : "Unknown";
+        const note = result.notes ? ` \u2014 ${result.notes}` : "";
+        showStreetBanner(`${winnerName} wins ${pot}${note}`);
+      }, 1800);
+    } else {
+      // No showdown — someone won by fold or last player standing
+      const pot = result ? (result.pot || playback.tableState.pot) : playback.tableState.pot;
+      const winnerSeat = result && result.winner_seat ? (result.winner_seat - 1) : -1;
+      let winnerName = "Unknown";
+      if (winnerSeat >= 0) {
+        const winner = PE.getPlayerBySeat(playback.players, winnerSeat);
+        if (winner) winnerName = winner.name;
+      } else if (playersInHand.length === 1) {
+        winnerName = playersInHand[0].name;
+      }
+      showStreetBanner(`${winnerName} wins ${pot}`);
+    }
+  }
 
   function showStreetBanner(text) {
     if (streetBannerTimer) clearTimeout(streetBannerTimer);
@@ -4653,16 +4737,20 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       if (PE.isHandWonByFold(playback.players)) {
         playback.currentStreet = "showdown";
         playback.tableState.actionSeat = -1;
+        const winner = playback.players.find(p => p.status !== "folded");
+        const pot = playback.tableState.pot || 0;
+        showStreetBanner(`${winner ? winner.name : "Winner"} wins ${pot}`);
       } else if (PE.isBettingRoundComplete(playback.players, playback.tableState)) {
-        // Advance street
         const streets = ["preflop", "flop", "turn", "river"];
         const curIdx = streets.indexOf(playback.currentStreet);
         if (curIdx < streets.length - 1) {
           const nextStreet = streets[curIdx + 1];
           transitionToStreet(nextStreet);
         } else {
+          // End of river — real showdown in branch mode
           playback.currentStreet = "showdown";
           playback.tableState.actionSeat = -1;
+          showStreetBanner("SHOWDOWN");
         }
       }
     }
@@ -4696,41 +4784,41 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   function dealRandomStreetCard(street) {
     if (playback.mode === "idle") return;
 
-    // Enter branch mode if in script
+    // Enter branch mode if in script (only show coaching banner on first deviation)
     if (playback.mode === "script") {
       enterBranchMode();
       showCoachingBanner();
     }
 
-    // Collect all known cards to exclude
+    // Determine the base board length for this street
+    const baseBoardLen = street === "turn" ? 3 : street === "river" ? 4 : -1;
+    if (baseBoardLen < 0) return;
+
+    // Trim board back to base length (allows re-dealing — "New Turn" again replaces the turn card)
+    if (playback.board.length > baseBoardLen) {
+      playback.board = playback.board.slice(0, baseBoardLen);
+    }
+    if (playback.board.length < baseBoardLen) return; // not enough board cards yet
+
+    // Collect all known cards to exclude (current board after trim + hero + villains)
     const usedCards = new Set([
       ...playback.heroCards,
       ...playback.board,
       ...Object.values(playback.knownVillainCards).flat()
     ]);
 
-    // Build remaining deck
-    const CU_local = window.CardUtils;
-    const fullDeck = CU_local.buildFullDeck();
+    // Pick random card from remaining deck
+    const fullDeck = window.CardUtils.buildFullDeck();
     const available = fullDeck.filter(c => !usedCards.has(c));
     if (!available.length) return;
-
-    // Pick random card
     const randomCard = available[Math.floor(Math.random() * available.length)];
 
     // Apply the card
     const bb = session.blinds.big;
-    if (street === "turn" && playback.board.length === 3) {
-      playback.board.push(randomCard);
-      playback.currentStreet = "turn";
-      PE.beginStreetRound("turn", playback.players, playback.tableState, SEAT_COUNT, bb);
-      showStreetBanner("NEW TURN");
-    } else if (street === "river" && playback.board.length === 4) {
-      playback.board.push(randomCard);
-      playback.currentStreet = "river";
-      PE.beginStreetRound("river", playback.players, playback.tableState, SEAT_COUNT, bb);
-      showStreetBanner("NEW RIVER");
-    }
+    playback.board.push(randomCard);
+    playback.currentStreet = street;
+    PE.beginStreetRound(street, playback.players, playback.tableState, SEAT_COUNT, bb);
+    showStreetBanner("NEW " + street.toUpperCase());
 
     clearStreetCallouts();
     clearAllBetChips();
@@ -5029,20 +5117,29 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   }
 
   function renderQAQuestion() {
+    const total = qaState.questions.length;
+    const blocking = qaState.questions.filter(q => q.severity === "blocking").length;
+    const warnings = total - blocking;
+    const remaining = total - qaState.currentIdx;
+
     const q = qaState.questions[qaState.currentIdx];
     if (!q) {
-      // All done
       els.qaContainer.style.display = "none";
       els.qaFinishBtn.style.display = "";
-      els.qaProgress.textContent = "All questions resolved!";
+      els.qaProgress.innerHTML = `All ${total} questions addressed! <span style="color:var(--text-muted)">(${blocking} errors, ${warnings} warnings)</span>`;
       return;
     }
     els.qaContainer.style.display = "";
     els.qaFinishBtn.style.display = "none";
-    els.qaProgress.textContent = `Question ${qaState.currentIdx + 1} of ${qaState.questions.length}`;
-    els.qaQuestion.textContent = q.question;
+
+    const sevColor = q.severity === "blocking" ? "#f88" : "#fa5";
+    const sevLabel = q.severity === "blocking" ? "ERROR" : "WARNING";
+    els.qaProgress.innerHTML = `Question ${qaState.currentIdx + 1} of ${total} ` +
+      `<span style="color:var(--text-muted)">(${remaining} remaining: ${blocking} errors, ${warnings} warnings)</span>`;
+    els.qaQuestion.innerHTML = `<span style="color:${sevColor};font-size:11px;font-weight:700;letter-spacing:1px;">${sevLabel}</span> ` + q.question;
     els.qaContext.textContent = q.context || "";
     els.qaInput.value = "";
+    els.qaInput.placeholder = q.severity === "blocking" ? "Your answer..." : "Your answer (or skip)...";
     els.qaInput.focus();
   }
 
@@ -5307,6 +5404,18 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     // Q&A screen
     els.qaSubmitBtn.addEventListener("click", submitQAAnswer);
     els.qaSkipBtn.addEventListener("click", skipQAQuestion);
+    els.qaRemoveHandBtn.addEventListener("click", () => {
+      const q = qaState.questions[qaState.currentIdx];
+      if (!q || !qaState.sessionData) { skipQAQuestion(); return; }
+      const handId = q.hand_id;
+      // Remove this hand from the session
+      qaState.sessionData.hands = qaState.sessionData.hands.filter(h => h.hand_id !== handId);
+      // Remove all questions for this hand
+      qaState.questions = qaState.questions.filter(qq => qq.hand_id !== handId);
+      // Stay at current index (next question slides in)
+      if (qaState.currentIdx >= qaState.questions.length) qaState.currentIdx = qaState.questions.length - 1;
+      renderQAQuestion();
+    });
     els.qaSkipAllBtn.addEventListener("click", () => {
       if (qaState.sessionData) openReview(qaState.sessionData);
     });

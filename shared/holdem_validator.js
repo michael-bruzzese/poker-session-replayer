@@ -299,6 +299,43 @@ const HoldemValidator = (() => {
     const seatsActed = new Set();
     const bigBlind = (hand.blinds || {}).big || 10;
 
+    // ---- Preflop action order validation ----
+    // First actor preflop should be UTG (seat after BB), not SB or BB
+    if (street === "preflop" && actions.length > 0) {
+      const firstActor = actions[0];
+      if (firstActor.position === "BB") {
+        errors.push({
+          severity: "error",
+          field: `${street}.actions[0]`,
+          message: `BB acts first preflop — UTG should act first`,
+          question: `Hand ${hid}, preflop: The big blind is listed as acting first. Preflop action starts with UTG (under the gun), not BB. Is the action order correct?`
+        });
+      } else if (firstActor.position === "SB") {
+        errors.push({
+          severity: "error",
+          field: `${street}.actions[0]`,
+          message: `SB acts first preflop — UTG should act first`,
+          question: `Hand ${hid}, preflop: The small blind is listed as acting first. Preflop action starts with UTG, then continues clockwise to the blinds. Is the action order correct?`
+        });
+      }
+    }
+
+    // ---- Postflop action order validation ----
+    // First actor postflop should be earliest position still in hand (SB first, then BB, etc.)
+    if (street !== "preflop" && actions.length > 0) {
+      const firstActor = actions[0];
+      const btnSeat = hand.button_seat;
+      // The first actor should NOT be the button (last to act postflop) unless heads-up IP
+      if (firstActor.position === "BTN" && actions.length > 1) {
+        errors.push({
+          severity: "warning",
+          field: `${street}.actions[0]`,
+          message: `Button acts first on ${street} — typically the earliest position acts first postflop`,
+          question: `Hand ${hid}, ${street}: The button is listed as acting first. Usually the earliest position (SB/BB/UTG etc.) acts first after the flop. Is this correct?`
+        });
+      }
+    }
+
     // Track preflop blind commitments
     if (street === "preflop") {
       currentBet = bigBlind;
