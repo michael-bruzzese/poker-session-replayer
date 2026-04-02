@@ -1106,6 +1106,8 @@
     btnRaise: document.getElementById("btnRaise"),
     btnAllIn: document.getElementById("btnAllIn"),
     sizeInput: document.getElementById("sizeInput"),
+    actingPrompt: document.getElementById("actingPrompt"),
+    actionButtons: document.getElementById("actionButtons"),
     btnGoOffScript: document.getElementById("btnGoOffScript"),
     navButtons: document.getElementById("navButtons"),
     btnPrevStep: document.getElementById("btnPrevStep"),
@@ -1603,8 +1605,8 @@
     showScreen("playback");
 
     if (session.hands.length > 0) {
-      // Delay slightly so the screen is visible and layout is computed
-      requestAnimationFrame(() => loadHand(0));
+      // Delay so the screen is visible and layout is computed before chip positioning
+      setTimeout(() => loadHand(0), 50);
     }
   }
 
