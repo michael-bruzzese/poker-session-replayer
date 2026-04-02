@@ -347,14 +347,12 @@
   /* Big center-table action pop-up */
   .action-popup {
     position: absolute;
-    top: 72%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.5);
     text-align: center;
     z-index: 20;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+    transform: translate(-50%, -50%) scale(0.5);
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, left 0.12s ease-out, top 0.12s ease-out;
   }
   .action-popup.visible {
     opacity: 1;
@@ -366,11 +364,11 @@
     transition: opacity 0.4s ease-in, transform 0.4s ease-in;
   }
   .action-popup-player {
-    font-size: 14px;
-    font-weight: 600;
-    color: rgba(255,255,255,0.8);
-    margin-bottom: 2px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.7);
   }
   .action-popup-action {
     font-size: 36px;
@@ -3780,6 +3778,26 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     updateSeatBetChips();
   }
 
+  // Position popup halfway between seat and table center
+  function popupPositionForSeat(seat) {
+    const seatEl = els.seatElements[seat];
+    if (!seatEl) return { left: "50%", top: "50%" };
+    const feltRect = els.tableFelt.getBoundingClientRect();
+    if (feltRect.width === 0) return { left: "50%", top: "50%" };
+    const seatRect = seatEl.getBoundingClientRect();
+
+    const seatCx = seatRect.left - feltRect.left + seatRect.width / 2;
+    const seatCy = seatRect.top - feltRect.top + seatRect.height / 2;
+    const centerX = feltRect.width / 2;
+    const centerY = feltRect.height / 2;
+
+    // 55% of the way from seat toward center (closer to seat than center)
+    const px = seatCx + (centerX - seatCx) * 0.55;
+    const py = seatCy + (centerY - seatCy) * 0.55;
+
+    return { left: px + "px", top: py + "px" };
+  }
+
   function showBigPopup(seat, action, amount) {
     if (popupFadeTimer) clearTimeout(popupFadeTimer);
 
@@ -3798,6 +3816,11 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     } else {
       els.actionPopupAmount.style.display = "none";
     }
+
+    // Position near the acting seat
+    const pos = popupPositionForSeat(seat);
+    els.actionPopup.style.left = pos.left;
+    els.actionPopup.style.top = pos.top;
 
     els.actionPopup.className = "action-popup visible";
 
