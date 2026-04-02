@@ -2675,69 +2675,131 @@ const ShorthandLearner = (() => {
 
   const DEFAULT_PATTERNS = {
     actions: {
-      // Single-char
+      // Single-char (universal shorthand)
       "f": "fold", "x": "check", "c": "call", "b": "bet", "r": "raise",
-      // Short words
-      "fold": "fold", "folds": "fold", "folded": "fold", "muck": "fold", "mucked": "fold",
-      "check": "check", "checks": "check", "checked": "check", "chk": "check",
-      "call": "call", "calls": "call", "called": "call", "flat": "call", "flats": "call", "flatted": "call",
-      "bet": "bet", "bets": "bet", "lead": "bet", "leads": "bet", "led": "bet",
-      "donk": "bet", "donks": "bet", "donked": "bet",
-      "raise": "raise", "raises": "raise", "raised": "raise", "bump": "raise", "bumps": "raise",
+      "ch": "check", "ck": "check", "chk": "check",
+      // Standard words + conjugations
+      "fold": "fold", "folds": "fold", "folded": "fold", "folding": "fold",
+      "muck": "fold", "mucked": "fold", "mucks": "fold", "mucking": "fold",
+      "pass": "fold", "passes": "fold", "passed": "fold",
+      "give up": "fold", "gave up": "fold", "gives up": "fold",
+      "let it go": "fold", "lets it go": "fold", "tossed": "fold",
+      "check": "check", "checks": "check", "checked": "check", "checking": "check",
+      "tap": "check", "taps": "check", "tapped": "check", "knocks": "check", "knocked": "check",
+      "call": "call", "calls": "call", "called": "call", "calling": "call",
+      "flat": "call", "flats": "call", "flatted": "call", "flatting": "call",
+      "smooth call": "call", "smooth-call": "call", "overcall": "call", "overcalls": "call",
+      "cold call": "call", "cold-call": "call", "cold calls": "call",
+      "peel": "call", "peels": "call", "peeled": "call", "peeling": "call",
+      "snap call": "call", "snap-call": "call", "snaps off": "call",
+      "bet": "bet", "bets": "bet", "betting": "bet",
+      "lead": "bet", "leads": "bet", "led": "bet", "leading": "bet",
+      "donk": "bet", "donks": "bet", "donked": "bet", "donk bet": "bet", "donk-bet": "bet",
+      "probe": "bet", "probes": "bet", "probed": "bet", "probe bet": "bet",
+      "stab": "bet", "stabs": "bet", "stabbed": "bet",
+      "fire": "bet", "fires": "bet", "fired": "bet", "fires a": "bet",
+      "barrel": "bet", "barrels": "bet", "barreled": "bet", "barrelled": "bet",
+      "2barrel": "bet", "2nd barrel": "bet", "double barrel": "bet", "double-barrel": "bet",
+      "3barrel": "bet", "3rd barrel": "bet", "triple barrel": "bet", "triple-barrel": "bet",
+      "raise": "raise", "raises": "raise", "raised": "raise", "raising": "raise",
+      "bump": "raise", "bumps": "raise", "bumped": "raise",
       "pop": "raise", "pops": "raise", "popped": "raise",
-      "open": "raise", "opens": "raise", "opened": "raise",
-      "limp": "call", "limps": "call", "limped": "call",
-      // Multi-word / compound
+      "open": "raise", "opens": "raise", "opened": "raise", "opening": "raise",
+      "iso": "raise", "isolate": "raise", "isolates": "raise", "isolated": "raise",
+      "squeeze": "raise", "squeezes": "raise", "squeezed": "raise",
+      "reraise": "raise", "re-raise": "raise", "re-raises": "raise", "reraised": "raise",
+      "limp": "call", "limps": "call", "limped": "call", "limping": "call",
+      "complete": "call", "completes": "call", "completed": "call",
+      // N-bet patterns (3bet, 4bet, 5bet)
       "3b": "raise", "3bet": "raise", "3bets": "raise", "3-bet": "raise", "3-bets": "raise",
-      "three-bet": "raise", "three-bets": "raise", "threebet": "raise",
+      "three-bet": "raise", "three-bets": "raise", "threebet": "raise", "3betted": "raise",
       "4b": "raise", "4bet": "raise", "4bets": "raise", "4-bet": "raise", "4-bets": "raise",
-      "four-bet": "raise", "four-bets": "raise",
-      "cbet": "bet", "c-bet": "bet", "c-bets": "bet", "cbets": "bet",
-      "cb": "bet", "continuation": "bet",
-      "ai": "all-in", "allin": "all-in", "all-in": "all-in",
-      "jam": "all-in", "jams": "all-in", "jammed": "all-in",
-      "shove": "all-in", "shoves": "all-in", "shoved": "all-in",
-      "ship": "all-in", "ships": "all-in", "shipped": "all-in",
-      "rip": "all-in", "rips": "all-in", "ripped": "all-in"
+      "four-bet": "raise", "four-bets": "raise", "fourbet": "raise",
+      "5b": "raise", "5bet": "raise", "5-bet": "raise", "five-bet": "raise",
+      // Continuation bet
+      "cbet": "bet", "c-bet": "bet", "c-bets": "bet", "cbets": "bet", "cbetting": "bet",
+      "cb": "bet", "continuation bet": "bet", "continuation": "bet",
+      // All-in
+      "ai": "all-in", "allin": "all-in", "all-in": "all-in", "all in": "all-in",
+      "jam": "all-in", "jams": "all-in", "jammed": "all-in", "jamming": "all-in",
+      "shove": "all-in", "shoves": "all-in", "shoved": "all-in", "shoving": "all-in",
+      "ship": "all-in", "ships": "all-in", "shipped": "all-in", "shipping": "all-in",
+      "rip": "all-in", "rips": "all-in", "ripped": "all-in", "rip it": "all-in",
+      "push": "all-in", "pushes": "all-in", "pushed": "all-in",
+      "move in": "all-in", "moves in": "all-in", "moved in": "all-in",
+      "puts it in": "all-in", "put it in": "all-in",
+      "goes all in": "all-in", "went all in": "all-in",
+      "gets it in": "all-in", "got it in": "all-in"
     },
-    // Compound actions: these expand into 2 actions
+    // Compound actions: expand into 2 actions
     compoundActions: {
-      "xr": ["check", "raise"], "cr": ["check", "raise"],
+      "xr": ["check", "raise"], "cr": ["check", "raise"], "x/r": ["check", "raise"],
       "check-raise": ["check", "raise"], "checkraise": ["check", "raise"],
       "check-raises": ["check", "raise"], "check-raised": ["check", "raise"],
-      "xc": ["check", "call"], "check-call": ["check", "call"],
+      "check raise": ["check", "raise"], "check raises": ["check", "raise"],
+      "xc": ["check", "call"], "x/c": ["check", "call"],
+      "check-call": ["check", "call"], "checkcall": ["check", "call"],
       "check-calls": ["check", "call"], "check-called": ["check", "call"],
-      "xf": ["check", "fold"], "check-fold": ["check", "fold"],
+      "check call": ["check", "call"], "check calls": ["check", "call"],
+      "xf": ["check", "fold"], "x/f": ["check", "fold"],
+      "check-fold": ["check", "fold"], "checkfold": ["check", "fold"],
       "check-folds": ["check", "fold"], "check-folded": ["check", "fold"],
-      "limp-call": ["call", "call"], "limp-fold": ["call", "fold"],
-      "limp-raise": ["call", "raise"], "limp-reraise": ["call", "raise"]
+      "check fold": ["check", "fold"], "check folds": ["check", "fold"],
+      "limp-call": ["call", "call"], "limp call": ["call", "call"],
+      "limp-fold": ["call", "fold"], "limp fold": ["call", "fold"],
+      "limp-raise": ["call", "raise"], "limp-reraise": ["call", "raise"],
+      "b/f": ["bet", "fold"], "bet-fold": ["bet", "fold"], "bet/fold": ["bet", "fold"],
+      "b/c": ["bet", "call"], "bet-call": ["bet", "call"], "bet/call": ["bet", "call"],
+      "b/3b": ["bet", "raise"], "bet-3bet": ["bet", "raise"]
     },
     positions: {
-      "utg": "UTG", "utg1": "UTG+1", "utg+1": "UTG+1", "under the gun": "UTG",
-      "utg2": "UTG+2", "utg+2": "UTG+2", "under-the-gun": "UTG",
-      "lj": "LJ", "lo": "LJ", "lojack": "LJ", "lowjack": "LJ",
-      "hj": "HJ", "hijack": "HJ", "hi-jack": "HJ",
-      "co": "CO", "cutoff": "CO", "cut-off": "CO", "cut": "CO",
-      "btn": "BTN", "bu": "BTN", "button": "BTN", "otb": "BTN", "dealer": "BTN",
-      "sb": "SB", "small blind": "SB", "small": "SB",
-      "bb": "BB", "big blind": "BB", "big": "BB",
+      // Standard abbreviations
+      "utg": "UTG", "utg1": "UTG+1", "utg+1": "UTG+1", "utg-1": "UTG+1",
+      "utg2": "UTG+2", "utg+2": "UTG+2", "utg-2": "UTG+2",
+      "utg3": "UTG+2", // sometimes used interchangeably
+      "under the gun": "UTG", "under-the-gun": "UTG", "underthegun": "UTG",
+      "lj": "LJ", "lo": "LJ", "lojack": "LJ", "lowjack": "LJ", "lo-jack": "LJ",
+      "hj": "HJ", "hijack": "HJ", "hi-jack": "HJ", "high-jack": "HJ",
+      "co": "CO", "cutoff": "CO", "cut-off": "CO", "cut off": "CO", "cut": "CO",
+      "btn": "BTN", "bu": "BTN", "button": "BTN", "otb": "BTN", "dealer": "BTN", "d": "BTN",
+      "sb": "SB", "small blind": "SB", "small": "SB", "smallblind": "SB",
+      "bb": "BB", "big blind": "BB", "big": "BB", "bigblind": "BB",
+      "straddle": "STRADDLE", "str": "STRADDLE",
+      // Generic position groups
       "ep": "UTG", "ep1": "UTG", "ep2": "UTG+1", "ep3": "UTG+2",
       "early position": "UTG", "early": "UTG",
-      "mp": "LJ", "mp1": "LJ", "mp2": "HJ", "middle position": "LJ", "middle": "LJ",
+      "mp": "LJ", "mp1": "LJ", "mp2": "HJ", "mp3": "HJ",
+      "middle position": "LJ", "middle": "LJ",
       "lp": "CO", "late position": "CO", "late": "CO",
-      "ip": "BTN", "oop": "BB"
+      "ip": "BTN", "in position": "BTN",
+      "oop": "BB", "out of position": "BB",
+      // Seat numbers as positions
+      "seat1": "1", "seat2": "2", "seat3": "3", "seat4": "4", "seat5": "5",
+      "seat6": "6", "seat7": "7", "seat8": "8", "seat9": "9",
+      "s1": "1", "s2": "2", "s3": "3", "s4": "4", "s5": "5",
+      "s6": "6", "s7": "7", "s8": "8", "s9": "9"
     },
     // Hero references — words that mean "me/hero"
     heroAliases: new Set([
-      "i", "me", "my", "hero", "we", "our", "myself", "i'm", "im"
+      "i", "me", "my", "hero", "we", "our", "myself", "i'm", "im",
+      "i've", "ive", "i'd", "id", "mine", "we're"
     ]),
     // Villain references — generic opponent
     villainAliases: {
-      "v": "villain", "villain": "villain", "villian": "villain",
-      "opp": "villain", "opponent": "villain",
+      "v": "villain", "v1": "villain", "v2": "villain",
+      "villain": "villain", "villian": "villain", "villan": "villain",
+      "opp": "villain", "opponent": "villain", "oppo": "villain",
       "he": "villain", "she": "villain", "they": "villain",
       "him": "villain", "her": "villain", "them": "villain",
-      "guy": "villain", "dude": "villain", "player": "villain"
+      "guy": "villain", "dude": "villain", "player": "villain",
+      "other guy": "villain", "other player": "villain",
+      "raiser": "villain", "opener": "villain", "pfr": "villain",
+      "caller": "villain", "limper": "villain",
+      "aggressor": "villain", "bettor": "villain",
+      "reg": "villain", "fish": "villain", "nit": "villain",
+      "whale": "villain", "rec": "villain", "recreational": "villain",
+      "lag": "villain", "tag": "villain", "maniac": "villain",
+      "old man": "villain", "omc": "villain", "young kid": "villain"
     },
     ranks: {
       "a": "A", "ace": "A", "aces": "A", "k": "K", "king": "K", "kings": "K",
@@ -2755,24 +2817,75 @@ const ShorthandLearner = (() => {
       "c": "c", "club": "c", "clubs": "c", "♣": "c"
     },
     // Hand name shortcuts
+    // Hand nickname shortcuts — rank pairs, no suits assigned (suits added at parse time)
     handNames: {
-      "pocket aces": ["A", "A"], "aces": ["A", "A"], "rockets": ["A", "A"], "bullets": ["A", "A"],
+      // Pocket pairs
+      "pocket aces": ["A", "A"], "aces": ["A", "A"], "rockets": ["A", "A"],
+      "bullets": ["A", "A"], "american airlines": ["A", "A"], "aa": ["A", "A"],
       "pocket kings": ["K", "K"], "kings": ["K", "K"], "cowboys": ["K", "K"],
+      "king kong": ["K", "K"], "kk": ["K", "K"],
       "pocket queens": ["Q", "Q"], "queens": ["Q", "Q"], "ladies": ["Q", "Q"],
-      "pocket jacks": ["J", "J"], "jacks": ["J", "J"], "hooks": ["J", "J"], "fishhooks": ["J", "J"],
-      "pocket tens": ["T", "T"], "tens": ["T", "T"], "dimes": ["T", "T"],
+      "bitches": ["Q", "Q"], "qq": ["Q", "Q"],
+      "pocket jacks": ["J", "J"], "jacks": ["J", "J"], "hooks": ["J", "J"],
+      "fishhooks": ["J", "J"], "jj": ["J", "J"],
+      "pocket tens": ["T", "T"], "tens": ["T", "T"], "dimes": ["T", "T"], "tt": ["T", "T"],
+      "pocket nines": ["9", "9"], "nines": ["9", "9"], "99": ["9", "9"],
+      "pocket eights": ["8", "8"], "eights": ["8", "8"], "snowmen": ["8", "8"], "88": ["8", "8"],
+      "pocket sevens": ["7", "7"], "sevens": ["7", "7"], "77": ["7", "7"],
+      "pocket sixes": ["6", "6"], "sixes": ["6", "6"], "66": ["6", "6"],
+      "pocket fives": ["5", "5"], "fives": ["5", "5"], "55": ["5", "5"],
+      "pocket fours": ["4", "4"], "fours": ["4", "4"], "44": ["4", "4"],
+      "pocket threes": ["3", "3"], "threes": ["3", "3"], "33": ["3", "3"],
+      "pocket twos": ["2", "2"], "twos": ["2", "2"], "ducks": ["2", "2"],
+      "deuces": ["2", "2"], "22": ["2", "2"],
+      // Named hands
       "big slick": ["A", "K"], "ak": ["A", "K"], "anna kournikova": ["A", "K"],
-      "big chick": ["A", "Q"], "aq": ["A", "Q"],
+      "ace king": ["A", "K"],
+      "big chick": ["A", "Q"], "aq": ["A", "Q"], "ace queen": ["A", "Q"],
+      "little slick": ["A", "Q"],
       "ace jack": ["A", "J"], "aj": ["A", "J"], "blackjack": ["A", "J"],
-      "king queen": ["K", "Q"], "kq": ["K", "Q"],
-      "pocket nines": ["9", "9"], "nines": ["9", "9"],
-      "pocket eights": ["8", "8"], "eights": ["8", "8"], "snowmen": ["8", "8"],
-      "pocket sevens": ["7", "7"], "sevens": ["7", "7"],
-      "pocket sixes": ["6", "6"], "sixes": ["6", "6"],
-      "pocket fives": ["5", "5"], "fives": ["5", "5"],
-      "pocket fours": ["4", "4"], "fours": ["4", "4"],
-      "pocket threes": ["3", "3"], "threes": ["3", "3"],
-      "pocket twos": ["2", "2"], "twos": ["2", "2"], "ducks": ["2", "2"], "deuces": ["2", "2"]
+      "ace ten": ["A", "T"], "at": ["A", "T"],
+      "king queen": ["K", "Q"], "kq": ["K", "Q"], "marriage": ["K", "Q"],
+      "king jack": ["K", "J"], "kj": ["K", "J"],
+      "king ten": ["K", "T"], "kt": ["K", "T"],
+      "queen jack": ["Q", "J"], "qj": ["Q", "J"],
+      "queen ten": ["Q", "T"], "qt": ["Q", "T"],
+      "jack ten": ["J", "T"], "jt": ["J", "T"],
+      "ten nine": ["T", "9"], "t9": ["T", "9"],
+      "nine eight": ["9", "8"], "98": ["9", "8"],
+      "eight seven": ["8", "7"], "87": ["8", "7"],
+      "seven six": ["7", "6"], "76": ["7", "6"],
+      "six five": ["6", "5"], "65": ["6", "5"],
+      "five four": ["5", "4"], "54": ["5", "4"]
+    },
+    // Board texture descriptors (for natural language parsing)
+    boardTextures: {
+      "rainbow": { suits: 3 },     // 3 different suits on flop
+      "two-tone": { suits: 2 },    // 2 suits on flop (flush draw possible)
+      "monotone": { suits: 1 },    // all one suit on flop
+      "dry": { connected: false },  // few draws available
+      "wet": { connected: true },   // many draws available
+      "paired": { paired: true },   // board has a pair
+      "double paired": { doublePaired: true },
+      "trips board": { trips: true }
+    },
+    // Amount descriptors (for natural language amounts)
+    amountDescriptors: {
+      "half pot": "0.5pot", "half-pot": "0.5pot",
+      "two thirds": "0.66pot", "two-thirds": "0.66pot", "2/3": "0.66pot", "2/3 pot": "0.66pot",
+      "three quarters": "0.75pot", "three-quarters": "0.75pot", "3/4": "0.75pot", "3/4 pot": "0.75pot",
+      "full pot": "1pot", "pot": "1pot", "pot size": "1pot", "pot-size": "1pot",
+      "overbet": "1.5pot", "over-bet": "1.5pot",
+      "min bet": "minbet", "minimum": "minbet", "min raise": "minraise", "min-raise": "minraise",
+      "small bet": "0.33pot", "third pot": "0.33pot", "1/3 pot": "0.33pot", "1/3": "0.33pot"
+    },
+    // Result descriptors
+    resultDescriptors: {
+      "wins": "win", "won": "win", "takes it": "win", "takes it down": "win", "scoops": "win",
+      "splits": "split", "chop": "split", "chopped": "split",
+      "loses": "lose", "lost": "lose", "busted": "lose",
+      "shows": "showdown", "showed": "showdown", "flips": "showdown", "tables": "showdown",
+      "mucks": "no_show", "doesn't show": "no_show"
     },
     streetMarkers: {
       "pre": "preflop", "preflop": "preflop", "pf": "preflop", "pre-flop": "preflop",
@@ -3265,7 +3378,9 @@ const ShorthandLearner = (() => {
 
     // Check for hand name shortcuts first ("pocket aces", "big slick", "AK suited")
     for (const [name, rankPair] of Object.entries(handNames)) {
-      if (lower.includes(name)) {
+      // Match whole words only (avoid "button" matching "tt", "the" matching "th")
+      const nameRegex = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+      if (nameRegex.test(lower)) {
         // Assign default suits if needed
         const suited = lower.includes("suited") || lower.includes("suit");
         if (rankPair[0] === rankPair[1]) {
