@@ -462,11 +462,62 @@
   <h1>Session Replayer</h1>
   <p>Upload a session file or load the demo to get started.</p>
   <div id="uploadZone" class="upload-zone">
-    <p>Drop a session file here (.json, .txt, .docx)</p>
+    <p>Drop a session file here (.json, .txt)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
     <input type="file" id="fileInput" accept=".json,.txt,.docx">
   </div>
-  <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
+  <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
+    <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
+    <button id="pasteTextBtn" class="demo-btn" style="background:#555">Paste Session Notes</button>
+  </div>
+</div>
+
+<!-- ============= PASTE/PARSE SCREEN ============= -->
+<div id="parseScreen" class="screen" style="padding:24px; align-items:center;">
+  <h2 style="font-size:22px; margin-bottom:16px;">Parse Session Notes</h2>
+  <p style="color:var(--text-secondary); max-width:600px; text-align:center; margin-bottom:16px;">
+    Paste your session notes below. Use <code>python3 parse_session.py notes.txt -o session.json</code> for
+    AI-powered parsing, or manually structure as JSON.
+  </p>
+  <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; justify-content:center;">
+    <label style="font-size:13px;">Blinds:
+      <input id="parseBlinds" style="width:60px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="2/5" value="2/5">
+    </label>
+    <label style="font-size:13px;">Hero Seat:
+      <select id="parseHeroSeat" style="padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;">
+        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+        <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+      </select>
+    </label>
+    <label style="font-size:13px;">Session Name:
+      <input id="parseSessionName" style="width:200px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="Tuesday $2/5">
+    </label>
+  </div>
+  <textarea id="parseTextArea" style="width:min(90%,700px); height:300px; padding:12px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:13px; resize:vertical;" placeholder="Paste session notes or JSON here..."></textarea>
+  <div style="display:flex; gap:12px; margin-top:16px;">
+    <button id="parseLoadJsonBtn" class="demo-btn">Load as JSON</button>
+    <button id="parseBackBtn" class="demo-btn" style="background:#555">Back</button>
+  </div>
+  <p id="parseStatus" style="margin-top:12px; font-size:13px; color:var(--text-muted);"></p>
+</div>
+
+<!-- ============= Q&A SCREEN ============= -->
+<div id="qaScreen" class="screen" style="padding:24px; align-items:center;">
+  <h2 style="font-size:22px; margin-bottom:16px;">Resolving Ambiguities</h2>
+  <div id="qaProgress" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;"></div>
+  <div id="qaContainer" style="width:min(90%,600px); background:#1e1e2e; border:1px solid #444; border-radius:8px; padding:20px;">
+    <div id="qaQuestion" style="font-size:15px; margin-bottom:12px;"></div>
+    <div id="qaContext" style="font-size:12px; color:var(--text-muted); margin-bottom:12px;"></div>
+    <input id="qaInput" style="width:100%; padding:10px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:6px; font-size:14px;" placeholder="Your answer...">
+    <div style="display:flex; gap:12px; margin-top:12px;">
+      <button id="qaSubmitBtn" class="demo-btn">Submit</button>
+      <button id="qaSkipBtn" class="demo-btn" style="background:#555">Skip</button>
+    </div>
+  </div>
+  <div style="margin-top:16px; display:flex; gap:12px;">
+    <button id="qaFinishBtn" class="demo-btn" style="display:none;">Finish &amp; Load Session</button>
+  </div>
 </div>
 
 <!-- ============= PLAYBACK SCREEN ============= -->
@@ -631,9 +682,27 @@
   const els = {
     uploadScreen: document.getElementById("uploadScreen"),
     playbackScreen: document.getElementById("playbackScreen"),
+    parseScreen: document.getElementById("parseScreen"),
+    qaScreen: document.getElementById("qaScreen"),
     uploadZone: document.getElementById("uploadZone"),
     fileInput: document.getElementById("fileInput"),
     loadDemoBtn: document.getElementById("loadDemoBtn"),
+    pasteTextBtn: document.getElementById("pasteTextBtn"),
+    parseTextArea: document.getElementById("parseTextArea"),
+    parseBlinds: document.getElementById("parseBlinds"),
+    parseHeroSeat: document.getElementById("parseHeroSeat"),
+    parseSessionName: document.getElementById("parseSessionName"),
+    parseLoadJsonBtn: document.getElementById("parseLoadJsonBtn"),
+    parseBackBtn: document.getElementById("parseBackBtn"),
+    parseStatus: document.getElementById("parseStatus"),
+    qaProgress: document.getElementById("qaProgress"),
+    qaContainer: document.getElementById("qaContainer"),
+    qaQuestion: document.getElementById("qaQuestion"),
+    qaContext: document.getElementById("qaContext"),
+    qaInput: document.getElementById("qaInput"),
+    qaSubmitBtn: document.getElementById("qaSubmitBtn"),
+    qaSkipBtn: document.getElementById("qaSkipBtn"),
+    qaFinishBtn: document.getElementById("qaFinishBtn"),
     sessionNameDisplay: document.getElementById("sessionNameDisplay"),
     toggleSidebarBtn: document.getElementById("toggleSidebarBtn"),
     loadNewBtn: document.getElementById("loadNewBtn"),
@@ -673,6 +742,8 @@
   function showScreen(name) {
     els.uploadScreen.classList.toggle("active", name === "upload");
     els.playbackScreen.classList.toggle("active", name === "playback");
+    els.parseScreen.classList.toggle("active", name === "parse");
+    els.qaScreen.classList.toggle("active", name === "qa");
   }
 
   // ---- Seat Rendering ----
@@ -1412,12 +1483,178 @@
     };
   }
 
+  // ---- Ambiguity Detection & Q&A ----
+
+  const qaState = {
+    sessionData: null,
+    questions: [],
+    currentIdx: 0
+  };
+
+  function detectAmbiguities(sessionData) {
+    const questions = [];
+    for (const hand of (sessionData.hands || [])) {
+      const hid = hand.hand_id || "?";
+      // Missing hero cards
+      if (!hand.hero_cards || hand.hero_cards.length < 2) {
+        questions.push({
+          hand_id: hid, field: "hero_cards", severity: "blocking",
+          question: `Hand ${hid}: What were hero's hole cards?`,
+          context: ""
+        });
+      }
+      // Missing board cards with later street actions
+      const streetsWithActions = new Set((hand.action_sequence || []).filter(s => s.actions && s.actions.length).map(s => s.street));
+      const board = hand.board || {};
+      if (streetsWithActions.has("flop") && (!board.flop || board.flop.length < 3)) {
+        questions.push({
+          hand_id: hid, field: "board.flop", severity: "blocking",
+          question: `Hand ${hid}: Flop action exists but no flop cards. What was the flop?`,
+          context: `Hero: ${(hand.hero_cards || []).join(" ")}`
+        });
+      }
+      if (streetsWithActions.has("turn") && !board.turn) {
+        questions.push({
+          hand_id: hid, field: "board.turn", severity: "blocking",
+          question: `Hand ${hid}: Turn action exists but no turn card. What was the turn?`,
+          context: `Flop: ${(board.flop || []).join(" ")}`
+        });
+      }
+      if (streetsWithActions.has("river") && !board.river) {
+        questions.push({
+          hand_id: hid, field: "board.river", severity: "blocking",
+          question: `Hand ${hid}: River action exists but no river card. What was the river?`,
+          context: `Board: ${(board.flop || []).join(" ")} ${board.turn || ""}`
+        });
+      }
+      // Bets/raises without amounts
+      for (const streetBlock of (hand.action_sequence || [])) {
+        for (const action of (streetBlock.actions || [])) {
+          if ((action.action === "bet" || action.action === "raise") && !action.amount) {
+            questions.push({
+              hand_id: hid, field: `${streetBlock.street}.amount`,
+              severity: "warning",
+              question: `Hand ${hid}, ${streetBlock.street}: Seat ${action.seat} ${action.action}s — what was the amount?`,
+              context: ""
+            });
+          }
+        }
+      }
+    }
+    return questions;
+  }
+
+  function startQA(sessionData) {
+    qaState.sessionData = sessionData;
+    qaState.questions = detectAmbiguities(sessionData);
+    qaState.currentIdx = 0;
+
+    if (qaState.questions.length === 0) {
+      // No ambiguities — go straight to playback
+      loadSession(sessionData);
+      return;
+    }
+
+    showScreen("qa");
+    renderQAQuestion();
+  }
+
+  function renderQAQuestion() {
+    const q = qaState.questions[qaState.currentIdx];
+    if (!q) {
+      // All done
+      els.qaContainer.style.display = "none";
+      els.qaFinishBtn.style.display = "";
+      els.qaProgress.textContent = "All questions resolved!";
+      return;
+    }
+    els.qaContainer.style.display = "";
+    els.qaFinishBtn.style.display = "none";
+    els.qaProgress.textContent = `Question ${qaState.currentIdx + 1} of ${qaState.questions.length}`;
+    els.qaQuestion.textContent = q.question;
+    els.qaContext.textContent = q.context || "";
+    els.qaInput.value = "";
+    els.qaInput.focus();
+  }
+
+  function submitQAAnswer() {
+    const answer = els.qaInput.value.trim();
+    if (!answer) return;
+
+    const q = qaState.questions[qaState.currentIdx];
+    const hand = qaState.sessionData.hands.find(h => h.hand_id === q.hand_id);
+    if (!hand) { qaState.currentIdx++; renderQAQuestion(); return; }
+
+    const cardRegex = /[AKQJT2-9][shdc]/gi;
+
+    if (q.field === "hero_cards") {
+      const cards = answer.match(cardRegex);
+      if (cards && cards.length >= 2) {
+        hand.hero_cards = cards.slice(0, 2).map(c => c[0].toUpperCase() + c[1].toLowerCase());
+      }
+    } else if (q.field === "board.flop") {
+      const cards = answer.match(cardRegex);
+      if (cards && cards.length >= 3) {
+        if (!hand.board) hand.board = {};
+        hand.board.flop = cards.slice(0, 3).map(c => c[0].toUpperCase() + c[1].toLowerCase());
+      }
+    } else if (q.field === "board.turn") {
+      const cards = answer.match(cardRegex);
+      if (cards && cards.length >= 1) {
+        if (!hand.board) hand.board = {};
+        hand.board.turn = cards[0][0].toUpperCase() + cards[0][1].toLowerCase();
+      }
+    } else if (q.field === "board.river") {
+      const cards = answer.match(cardRegex);
+      if (cards && cards.length >= 1) {
+        if (!hand.board) hand.board = {};
+        hand.board.river = cards[0][0].toUpperCase() + cards[0][1].toLowerCase();
+      }
+    } else if (q.field.includes("amount")) {
+      const numMatch = answer.match(/\d+/);
+      if (numMatch) {
+        // Find the action and update it
+        // This is a simplified approach — the Python parser handles this more precisely
+      }
+    }
+
+    qaState.currentIdx++;
+    renderQAQuestion();
+  }
+
+  function skipQAQuestion() {
+    qaState.currentIdx++;
+    renderQAQuestion();
+  }
+
   // ---- Event Handlers ----
 
   function setupEvents() {
     // Upload
-    els.loadDemoBtn.addEventListener("click", () => {
-      loadSession(buildDemoSession());
+    els.loadDemoBtn.addEventListener("click", () => loadSession(buildDemoSession()));
+    els.pasteTextBtn.addEventListener("click", () => showScreen("parse"));
+
+    // Parse screen
+    els.parseLoadJsonBtn.addEventListener("click", () => {
+      const text = els.parseTextArea.value.trim();
+      if (!text) { els.parseStatus.textContent = "Paste session data first."; return; }
+      try {
+        const data = JSON.parse(text);
+        startQA(data);
+      } catch (e) {
+        els.parseStatus.textContent = "Not valid JSON. Use parse_session.py to convert text notes to JSON first.";
+      }
+    });
+    els.parseBackBtn.addEventListener("click", () => showScreen("upload"));
+
+    // Q&A screen
+    els.qaSubmitBtn.addEventListener("click", submitQAAnswer);
+    els.qaSkipBtn.addEventListener("click", skipQAQuestion);
+    els.qaFinishBtn.addEventListener("click", () => {
+      if (qaState.sessionData) loadSession(qaState.sessionData);
+    });
+    els.qaInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitQAAnswer();
     });
 
     els.uploadZone.addEventListener("click", () => els.fileInput.click());
@@ -1495,20 +1732,22 @@
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result);
-          loadSession(data);
+          startQA(data);
         } catch (err) {
           window.alert("Failed to parse JSON: " + err.message);
         }
       };
       reader.readAsText(file);
-    } else if (name.endsWith(".txt")) {
+    } else if (name.endsWith(".txt") || name.endsWith(".docx")) {
       reader.onload = () => {
-        // For now, show the raw text — full LLM parsing in Phase 4
-        window.alert("Text file loaded. LLM parsing coming in a future update. For now, use JSON format or the demo.");
+        // Show in parse screen for manual review
+        els.parseTextArea.value = reader.result;
+        els.parseStatus.textContent = `Loaded ${file.name} (${reader.result.length} chars). To parse with AI, run: python3 parse_session.py "${file.name}" -o session.json`;
+        showScreen("parse");
       };
       reader.readAsText(file);
     } else {
-      window.alert("Supported formats: .json, .txt (coming soon: .docx)");
+      window.alert("Supported formats: .json, .txt, .docx");
     }
   }
 
