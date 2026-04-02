@@ -1468,8 +1468,9 @@
 
     // Nav buttons
     const canAdvanceStep = inScript && playback.currentStepIndex < playback.totalSteps - 1;
+    const canTriggerShowdown = inScript && playback.currentStepIndex >= playback.totalSteps - 1 && playback.totalSteps > 0 && playback.currentStreet !== "showdown";
     const canAdvanceHand = inScript && playback.currentStreet === "showdown" && playback.currentHandIndex < session.hands.length - 1;
-    els.btnNextStep.disabled = !(canAdvanceStep || canAdvanceHand);
+    els.btnNextStep.disabled = !(canAdvanceStep || canTriggerShowdown || canAdvanceHand);
     els.btnPrevStep.disabled = !(inScript && playback.currentStepIndex >= 0);
     els.btnNextHand.disabled = !(hasSession && playback.currentHandIndex < session.hands.length - 1);
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
