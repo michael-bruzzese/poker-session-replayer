@@ -4,7 +4,10 @@
 const CardUtils = (() => {
   "use strict";
 
-  const C = typeof PokerConstants !== "undefined" ? PokerConstants : window.PokerConstants;
+  const C = typeof PokerConstants !== "undefined" ? PokerConstants
+    : typeof window !== "undefined" ? window.PokerConstants
+    : typeof require !== "undefined" ? require("./constants.js")
+    : {};
 
   function formatCard(code) {
     if (!code || code.length < 2) return "??";
@@ -129,3 +132,4 @@ const CardUtils = (() => {
 })();
 
 if (typeof window !== "undefined") window.CardUtils = CardUtils;
+if (typeof module !== "undefined" && module.exports) module.exports = CardUtils;

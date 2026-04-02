@@ -1682,11 +1682,47 @@
 
   function startQA(sessionData) {
     qaState.sessionData = sessionData;
-    qaState.questions = detectAmbiguities(sessionData);
+
+    // Run Hold'em rules validation first
+    const HV = window.HoldemValidator;
+    let questions = [];
+    if (HV) {
+      const violations = HV.validateSession(sessionData);
+      // Convert violations to Q&A questions (only errors and blocking warnings)
+      violations.forEach((v) => {
+        questions.push({
+          hand_id: v.hand_id,
+          field: v.field,
+          severity: v.severity === "error" ? "blocking" : "warning",
+          question: v.question || v.message,
+          context: v.message
+        });
+      });
+    }
+
+    // Also run basic ambiguity detection
+    const ambiguities = detectAmbiguities(sessionData);
+    // Merge, avoiding duplicates by field+hand_id
+    const seen = new Set(questions.map(q => `${q.hand_id}:${q.field}`));
+    ambiguities.forEach((a) => {
+      const key = `${a.hand_id}:${a.field}`;
+      if (!seen.has(key)) {
+        questions.push(a);
+        seen.add(key);
+      }
+    });
+
+    // Sort: blocking first, then by hand_id
+    questions.sort((a, b) => {
+      if (a.severity === "blocking" && b.severity !== "blocking") return -1;
+      if (a.severity !== "blocking" && b.severity === "blocking") return 1;
+      return (a.hand_id || 0) - (b.hand_id || 0);
+    });
+
+    qaState.questions = questions;
     qaState.currentIdx = 0;
 
-    if (qaState.questions.length === 0) {
-      // No ambiguities — go to review
+    if (questions.length === 0) {
       openReview(sessionData);
       return;
     }
@@ -1855,11 +1891,28 @@
       html += `</div>`;
     }
 
-    // Warnings
+    // Parser warnings
     if (hand.warnings && hand.warnings.length) {
       html += `<div class="review-warnings">`;
       hand.warnings.forEach(w => { html += `<div>&#9888; ${w}</div>`; });
       html += `</div>`;
+    }
+
+    // Hold'em rules validation
+    const HV = window.HoldemValidator;
+    if (HV) {
+      const violations = HV.validateHand(hand, 9);
+      if (violations.length) {
+        html += `<div class="review-section" style="border-color:#d44;"><h4 style="color:#f88;">Hold'em Rule Violations (${violations.length})</h4>`;
+        violations.forEach(v => {
+          const icon = v.severity === "error" ? "&#10060;" : "&#9888;";
+          html += `<div style="font-size:12px; margin-bottom:4px; color:${v.severity === 'error' ? '#f88' : '#fa5'}">${icon} ${v.message}</div>`;
+          if (v.question) {
+            html += `<div style="font-size:11px; color:var(--text-muted); margin-left:20px; margin-bottom:6px;">&#8594; ${v.question}</div>`;
+          }
+        });
+        html += `</div>`;
+      }
     }
 
     // Confirm button

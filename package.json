@@ -1,0 +1,16 @@
+{
+  "name": "poker-session-replayer",
+  "version": "1.0.0",
+  "description": "A poker coaching playback tool for replaying live session hands step-by-step in a Zoom coaching environment.",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  }
+}

@@ -7,7 +7,10 @@
 const PokerEngine = (() => {
   "use strict";
 
-  const C = typeof PokerConstants !== "undefined" ? PokerConstants : window.PokerConstants;
+  const C = typeof PokerConstants !== "undefined" ? PokerConstants
+    : typeof window !== "undefined" ? window.PokerConstants
+    : typeof require !== "undefined" ? require("./constants.js")
+    : {};
 
   // ---- Utility ----
 
@@ -595,3 +598,4 @@ const PokerEngine = (() => {
 })();
 
 if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
+if (typeof module !== "undefined" && module.exports) module.exports = PokerEngine;

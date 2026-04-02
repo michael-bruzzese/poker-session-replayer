@@ -42,3 +42,4 @@ const PokerConstants = (() => {
 })();
 
 if (typeof window !== "undefined") window.PokerConstants = PokerConstants;
+if (typeof module !== "undefined" && module.exports) module.exports = PokerConstants;

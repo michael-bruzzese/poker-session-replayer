@@ -19,6 +19,7 @@ SHARED_FILES = [
     "constants.js",
     "card_utils.js",
     "table_engine.js",
+    "holdem_validator.js",
 ]
 
 # Card image directories to search (relative to script dir, or absolute)
