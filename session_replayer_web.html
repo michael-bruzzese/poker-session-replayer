@@ -430,11 +430,88 @@
   }
 
   /* Action bar mode switching */
-  .action-buttons.hidden-in-script {
-    display: none;
+  .action-buttons.script-dimmed {
+    opacity: 0.35;
+    transition: opacity 0.2s;
   }
+  .action-buttons.script-dimmed:hover {
+    opacity: 0.7;
+  }
+  .action-buttons.script-dimmed .action-btn { cursor: pointer !important; }
   .acting-prompt.script-mode .acting-label { display: none; }
   .acting-prompt.script-mode .acting-name { font-size: 14px; color: var(--text-muted); }
+
+  /* Action button click flash */
+  .action-btn.flash {
+    transform: scale(1.15);
+    box-shadow: 0 0 20px rgba(255,255,255,0.5);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  /* Coaching time banner */
+  .coaching-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.6);
+    z-index: 30;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+  }
+  .coaching-banner.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .coaching-banner.fade-out {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.05);
+    transition: opacity 0.6s ease-in, transform 0.6s ease-in;
+  }
+  .coaching-banner-line1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffa;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .coaching-banner-line2 {
+    font-size: 38px;
+    font-weight: 900;
+    color: #ffd700;
+    text-shadow: 0 3px 12px rgba(0,0,0,0.7);
+    letter-spacing: 3px;
+    margin-top: 4px;
+  }
+
+  /* Dealer button */
+  .dealer-btn {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #fff, #ddd);
+    border: 2px solid #999;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+    color: #333;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  /* Branch mode table glow */
+  .table-felt.branch-glow {
+    box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(0,0,0,0.3), 0 0 30px rgba(255,165,0,0.3);
+    border-color: #5a3a0a;
+    transition: box-shadow 0.4s, border-color 0.4s;
+  }
 
   /* Script mode: larger, centered nav */
   .nav-buttons.script-centered {
@@ -922,6 +999,13 @@
             </div>
           </div>
           <div id="boardCards" class="board-cards"></div>
+          <!-- Dealer button -->
+          <div id="dealerBtn" class="dealer-btn" style="display:none;">D</div>
+          <!-- Coaching time banner -->
+          <div id="coachingBanner" class="coaching-banner">
+            <div class="coaching-banner-line1">Going Off-Script</div>
+            <div class="coaching-banner-line2">It's Coaching Time!</div>
+          </div>
           <!-- Street announcement -->
           <div id="streetBanner" class="street-banner"></div>
           <!-- Action pop-up overlay -->
@@ -978,8 +1062,6 @@
           <button id="btnRaise" class="action-btn raise" disabled>Raise</button>
           <button id="btnAllIn" class="action-btn allin" disabled>All In</button>
         </div>
-
-        <button id="btnGoOffScript" class="branch-entry-btn" style="display:none">Go Off-Script</button>
 
         <div id="navButtons" class="nav-buttons">
           <button id="btnPrevStep" class="nav-btn" disabled>&lt;&lt; Prev</button>
@@ -1107,6 +1189,8 @@
     potAmount: document.getElementById("potAmount"),
     potChips: document.getElementById("potChips"),
     boardCards: document.getElementById("boardCards"),
+    dealerBtn: document.getElementById("dealerBtn"),
+    coachingBanner: document.getElementById("coachingBanner"),
     streetBanner: document.getElementById("streetBanner"),
     actionPopup: document.getElementById("actionPopup"),
     actionPopupPlayer: document.getElementById("actionPopupPlayer"),
@@ -1133,7 +1217,6 @@
     sizeInput: document.getElementById("sizeInput"),
     actingPrompt: document.getElementById("actingPrompt"),
     actionButtons: document.getElementById("actionButtons"),
-    btnGoOffScript: document.getElementById("btnGoOffScript"),
     navButtons: document.getElementById("navButtons"),
     btnPrevStep: document.getElementById("btnPrevStep"),
     btnNextStep: document.getElementById("btnNextStep"),
@@ -1350,17 +1433,17 @@
     const hasSeat = playback.tableState && playback.tableState.actionSeat >= 0;
     const hasSession = session.hands.length > 0;
 
-    // Toggle action buttons visibility: hidden in script, visible in branch
-    els.actionButtons.classList.toggle("hidden-in-script", !inBranch);
+    // Action buttons: dimmed in script (clickable to enter branch), full in branch
+    els.actionButtons.classList.toggle("script-dimmed", inScript);
     els.actingPrompt.classList.toggle("script-mode", !inBranch);
 
-    // "Go Off-Script" button: show in script mode, hide in branch
-    els.btnGoOffScript.style.display = inScript ? "" : "none";
+    // Table glow in branch mode
+    els.tableFelt.classList.toggle("branch-glow", inBranch);
 
     // Nav buttons layout
     els.navButtons.classList.toggle("script-centered", !inBranch);
 
-    if (inBranch && hasSeat) {
+    if ((inBranch || inScript) && hasSeat) {
       const legal = PE.getLegalActions(playback.tableState.actionSeat, playback.players, playback.tableState);
       els.btnFold.disabled = !legal.fold;
       els.btnCheck.disabled = !legal.check;
@@ -1369,7 +1452,15 @@
       els.btnBet.disabled = !legal.bet;
       els.btnRaise.disabled = !legal.raise;
       els.btnAllIn.disabled = !legal.allIn;
-      els.sizeInput.value = legal.minRaiseTo || session.blinds.big;
+      if (inBranch) els.sizeInput.value = legal.minRaiseTo || session.blinds.big;
+    } else if (!hasSeat) {
+      els.btnFold.disabled = true;
+      els.btnCheck.disabled = true;
+      els.btnCall.disabled = true;
+      els.btnCall.textContent = "Call";
+      els.btnBet.disabled = true;
+      els.btnRaise.disabled = true;
+      els.btnAllIn.disabled = true;
     }
 
     // Nav buttons
@@ -1412,6 +1503,7 @@
     renderStatus();
     updateActionButtons();
     updateSeatBetChips();
+    renderDealerButton();
   }
 
   // ---- Action Callouts ----
@@ -1993,6 +2085,80 @@
   }
 
   // ---- Branch Mode ----
+
+  // ---- Coach Action (auto-enters branch if in script mode) ----
+
+  function coachAction(action, btnEl, sizeChips) {
+    if (playback.mode === "idle") return;
+    if (!playback.tableState || playback.tableState.actionSeat < 0) return;
+
+    // Flash the button
+    if (btnEl) {
+      btnEl.classList.add("flash");
+      setTimeout(() => btnEl.classList.remove("flash"), 200);
+    }
+
+    // Auto-enter branch mode if still in script
+    if (playback.mode === "script") {
+      enterBranchMode();
+      showCoachingBanner();
+    }
+
+    applyBranchAction(action, sizeChips);
+  }
+
+  // ---- Coaching Banner ----
+
+  let coachingBannerTimer = 0;
+
+  function showCoachingBanner() {
+    if (coachingBannerTimer) clearTimeout(coachingBannerTimer);
+    els.coachingBanner.className = "coaching-banner visible";
+    coachingBannerTimer = setTimeout(() => {
+      els.coachingBanner.classList.remove("visible");
+      els.coachingBanner.classList.add("fade-out");
+      coachingBannerTimer = setTimeout(() => {
+        els.coachingBanner.className = "coaching-banner";
+      }, 700);
+    }, 2000);
+  }
+
+  // ---- Dealer Button ----
+
+  const DEALER_BTN_OFFSETS_9 = [
+    { dx: -40, dy: -25 },   // seat 0 (bottom-center) → up-left
+    { dx: 30, dy: -20 },    // seat 1 (bottom-left) → up-right
+    { dx: 35, dy: -5 },     // seat 2 (mid-left) → right
+    { dx: 30, dy: 25 },     // seat 3 (top-left) → down-right
+    { dx: 15, dy: 35 },     // seat 4 (top-left-center) → down
+    { dx: 0, dy: 40 },      // seat 5 (top-center) → down
+    { dx: -15, dy: 35 },    // seat 6 (top-right-center) → down
+    { dx: -30, dy: 25 },    // seat 7 (top-right) → down-left
+    { dx: -35, dy: -5 }     // seat 8 (mid-right) → left
+  ];
+
+  function renderDealerButton() {
+    if (!playback.tableState) {
+      els.dealerBtn.style.display = "none";
+      return;
+    }
+    const btnSeat = playback.tableState.buttonSeat;
+    const seatEl = els.seatElements[btnSeat];
+    if (!seatEl) { els.dealerBtn.style.display = "none"; return; }
+
+    const feltRect = els.tableFelt.getBoundingClientRect();
+    if (feltRect.width === 0) return;
+    const seatRect = seatEl.getBoundingClientRect();
+    if (seatRect.width === 0) return;
+
+    const offset = DEALER_BTN_OFFSETS_9[btnSeat] || { dx: 0, dy: -30 };
+    const cx = seatRect.left - feltRect.left + seatRect.width / 2 + offset.dx;
+    const cy = seatRect.top - feltRect.top + seatRect.height / 2 + offset.dy;
+
+    els.dealerBtn.style.left = cx + "px";
+    els.dealerBtn.style.top = cy + "px";
+    els.dealerBtn.style.display = "flex";
+  }
 
   function enterBranchMode() {
     if (playback.mode === "idle") return;
@@ -2716,13 +2882,12 @@
     els.btnPrevHand.addEventListener("click", () => loadHand(playback.currentHandIndex - 1));
 
     // Action buttons (branch mode)
-    els.btnFold.addEventListener("click", () => applyBranchAction("fold"));
-    els.btnCheck.addEventListener("click", () => applyBranchAction("check"));
-    els.btnCall.addEventListener("click", () => applyBranchAction("call"));
-    els.btnBet.addEventListener("click", () => applyBranchAction("bet", Number(els.sizeInput.value)));
-    els.btnRaise.addEventListener("click", () => applyBranchAction("raise", Number(els.sizeInput.value)));
-    els.btnAllIn.addEventListener("click", () => applyBranchAction("all-in"));
-    els.btnGoOffScript.addEventListener("click", () => enterBranchMode());
+    els.btnFold.addEventListener("click", () => coachAction("fold", els.btnFold));
+    els.btnCheck.addEventListener("click", () => coachAction("check", els.btnCheck));
+    els.btnCall.addEventListener("click", () => coachAction("call", els.btnCall));
+    els.btnBet.addEventListener("click", () => coachAction("bet", els.btnBet, Number(els.sizeInput.value)));
+    els.btnRaise.addEventListener("click", () => coachAction("raise", els.btnRaise, Number(els.sizeInput.value)));
+    els.btnAllIn.addEventListener("click", () => coachAction("all-in", els.btnAllIn));
 
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
