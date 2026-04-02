@@ -435,18 +435,32 @@
   }
   .branch-entry-btn:hover { border-color: #fa5; color: #fa5; }
 
-  /* Bet chip animation (flies from seat toward pot) */
-  .bet-chip-anim {
+  /* Committed chips in front of a seat */
+  .seat-bet-chips {
     position: absolute;
-    width: 22px;
-    height: 22px;
+    z-index: 15;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    transform: translate(-50%, -50%);
+    transition: left 0.4s ease-in-out, top 0.4s ease-in-out, opacity 0.3s ease-in;
+  }
+  .seat-bet-chip {
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: radial-gradient(circle at 40% 35%, #ffd700, #c8a000);
     border: 2px solid #a08000;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    z-index: 15;
-    pointer-events: none;
-    transition: left 0.45s ease-in-out, top 0.45s ease-in-out, opacity 0.15s ease-in;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  .seat-bet-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    margin-top: 1px;
   }
 
   /* 9-seat positions (percentages of felt) */
@@ -1330,6 +1344,7 @@
     renderBoard();
     renderStatus();
     updateActionButtons();
+    updateSeatBetChips();
   }
 
   // ---- Action Callouts ----
@@ -1350,10 +1365,8 @@
     // Big center pop-up
     showBigPopup(seat, action, amount);
 
-    // Chip animation for bets/raises/calls
-    if (action === "bet" || action === "raise" || action === "call" || action === "all-in") {
-      animateBetChip(seat);
-    }
+    // Update committed chips in front of seats
+    updateSeatBetChips();
   }
 
   function showBigPopup(seat, action, amount) {
@@ -1392,41 +1405,124 @@
     playback.actionCallouts = {};
     if (popupFadeTimer) clearTimeout(popupFadeTimer);
     els.actionPopup.className = "action-popup";
+    clearAllBetChips();
   }
 
   // ---- Chip Animation ----
 
-  function animateBetChip(seat) {
+  // Chips placed in front of each seat (key: seat index, value: DOM element)
+  const seatBetChipEls = {};
+
+  // Offset from seat center toward the table center for chip placement
+  const CHIP_OFFSETS_9 = [
+    { dx: 0, dy: -45 },    // seat 0 (bottom-center) → up
+    { dx: 25, dy: -35 },   // seat 1 (bottom-left) → up-right
+    { dx: 30, dy: -15 },   // seat 2 (mid-left) → right
+    { dx: 25, dy: 20 },    // seat 3 (top-left) → down-right
+    { dx: 15, dy: 30 },    // seat 4 (top-left-center) → down
+    { dx: 0, dy: 35 },     // seat 5 (top-center) → down
+    { dx: -15, dy: 30 },   // seat 6 (top-right-center) → down
+    { dx: -25, dy: 20 },   // seat 7 (top-right) → down-left
+    { dx: -30, dy: -15 }   // seat 8 (mid-right) → left
+  ];
+
+  function placeBetChipAtSeat(seat, amount) {
+    // Remove existing chip for this seat if any
+    if (seatBetChipEls[seat]) {
+      seatBetChipEls[seat].remove();
+      delete seatBetChipEls[seat];
+    }
+
+    if (!amount || amount <= 0) return;
+
     const seatEl = els.seatElements[seat];
     if (!seatEl) return;
     const feltRect = els.tableFelt.getBoundingClientRect();
     const seatRect = seatEl.getBoundingClientRect();
 
-    const chip = document.createElement("div");
-    chip.className = "bet-chip-anim";
+    const el = document.createElement("div");
+    el.className = "seat-bet-chips";
 
-    // Start at seat position (relative to felt)
-    const startX = seatRect.left - feltRect.left + seatRect.width / 2 - 11;
-    const startY = seatRect.top - feltRect.top + seatRect.height / 2 - 11;
-    chip.style.left = startX + "px";
-    chip.style.top = startY + "px";
-    chip.style.opacity = "1";
+    // Chip icon
+    const chipCount = Math.min(3, Math.max(1, Math.ceil(amount / (session.blinds.big * 10 || 50))));
+    for (let i = 0; i < chipCount; i++) {
+      const chip = document.createElement("div");
+      chip.className = "seat-bet-chip";
+      el.appendChild(chip);
+    }
 
-    els.tableFelt.appendChild(chip);
+    // Amount label
+    const label = document.createElement("div");
+    label.className = "seat-bet-label";
+    label.textContent = amount;
+    el.appendChild(label);
 
-    // Animate to pot center
-    requestAnimationFrame(() => {
-      const endX = feltRect.width / 2 - 11;
-      const endY = feltRect.height * 0.30;
-      chip.style.left = endX + "px";
-      chip.style.top = endY + "px";
+    // Position: seat center + offset toward table center
+    const offset = CHIP_OFFSETS_9[seat] || { dx: 0, dy: -40 };
+    const cx = seatRect.left - feltRect.left + seatRect.width / 2 + offset.dx;
+    const cy = seatRect.top - feltRect.top + seatRect.height / 2 + offset.dy;
+    el.style.left = cx + "px";
+    el.style.top = cy + "px";
+
+    el.dataset.seat = seat;
+    els.tableFelt.appendChild(el);
+    seatBetChipEls[seat] = el;
+  }
+
+  function rakeChipsToPot(onComplete) {
+    const chipEls = Object.values(seatBetChipEls);
+    if (!chipEls.length) {
+      if (onComplete) onComplete();
+      return;
+    }
+
+    const feltRect = els.tableFelt.getBoundingClientRect();
+    const potX = feltRect.width / 2;
+    const potY = feltRect.height * 0.22;
+
+    // Animate all chips to pot center
+    chipEls.forEach((el) => {
+      el.style.left = potX + "px";
+      el.style.top = potY + "px";
     });
 
-    // Remove after animation
+    // After animation, fade out and remove
     setTimeout(() => {
-      chip.style.opacity = "0";
-      setTimeout(() => chip.remove(), 200);
-    }, 500);
+      chipEls.forEach((el) => {
+        el.style.opacity = "0";
+      });
+      setTimeout(() => {
+        chipEls.forEach((el) => el.remove());
+        Object.keys(seatBetChipEls).forEach((k) => delete seatBetChipEls[k]);
+        if (onComplete) onComplete();
+      }, 350);
+    }, 450);
+  }
+
+  function clearAllBetChips() {
+    Object.values(seatBetChipEls).forEach((el) => el.remove());
+    Object.keys(seatBetChipEls).forEach((k) => delete seatBetChipEls[k]);
+  }
+
+  function updateSeatBetChips() {
+    // Place/update chips for each player's current street commitment
+    if (!playback.players.length) return;
+    for (let i = 0; i < SEAT_COUNT; i++) {
+      const player = PE.getPlayerBySeat(playback.players, i);
+      if (!player || player.status === "folded") {
+        if (seatBetChipEls[i]) {
+          seatBetChipEls[i].remove();
+          delete seatBetChipEls[i];
+        }
+        continue;
+      }
+      if (player.committedStreet > 0) {
+        placeBetChipAtSeat(i, player.committedStreet);
+      } else if (seatBetChipEls[i]) {
+        seatBetChipEls[i].remove();
+        delete seatBetChipEls[i];
+      }
+    }
   }
 
   // ---- Pot Chip Stack Rendering ----
@@ -1643,10 +1739,14 @@
     if (stepAnimating) return;
 
     if (playback.currentStepIndex >= playback.totalSteps - 1) {
-      playback.currentStreet = "showdown";
-      playback.tableState.actionSeat = -1;
-      showStreetBanner("SHOWDOWN");
-      render();
+      stepAnimating = true;
+      rakeChipsToPot(() => {
+        playback.currentStreet = "showdown";
+        playback.tableState.actionSeat = -1;
+        showStreetBanner("SHOWDOWN");
+        render();
+        stepAnimating = false;
+      });
       return;
     }
 
@@ -1658,16 +1758,18 @@
     stepAnimating = true;
 
     if (needsStreetTransition) {
-      // Street transition: show banner → deal cards → then apply action
-      transitionToStreet(newStreet);
-      renderBoard();
-      renderStatus();
-      showStreetBanner(newStreet.toUpperCase());
+      // Street transition: rake chips to pot → show banner → deal cards → apply action
+      rakeChipsToPot(() => {
+        transitionToStreet(newStreet);
+        renderBoard();
+        renderStatus();
+        showStreetBanner(newStreet.toUpperCase());
 
-      setTimeout(() => {
-        applyStepAction(step, nextIdx);
-        stepAnimating = false;
-      }, 700);
+        setTimeout(() => {
+          applyStepAction(step, nextIdx);
+          stepAnimating = false;
+        }, 700);
+      });
     } else {
       // Normal action: highlight seat → brief pause → apply
       const seatIdx = (step.seat || 1) - 1;
