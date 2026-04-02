@@ -1874,12 +1874,31 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
 
   // ---- Session Loading ----
 
+  const STORAGE_KEY = "sessionReplayerLastSession";
+
+  function saveSessionToStorage(data) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) { /* quota exceeded or private mode — ignore */ }
+  }
+
+  function loadSessionFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
   function loadSession(data) {
     session.loaded = true;
     session.name = data.session_name || "Unnamed Session";
     session.hands = data.hands || [];
     session.players = data.players || {};
     session.blinds = data.blinds || { small: 5, big: 10 };
+
+    // Auto-save for crash recovery
+    saveSessionToStorage(data);
 
     els.sessionNameDisplay.textContent = session.name;
     els.handCountDisplay.textContent = `${session.hands.length} hands`;
@@ -2843,6 +2862,20 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
 
   createSeatElements();
   setupEvents();
+
+  // Check for saved session
+  const saved = loadSessionFromStorage();
+  if (saved && saved.hands && saved.hands.length) {
+    // Show resume option
+    const resumeBtn = document.createElement("button");
+    resumeBtn.className = "demo-btn";
+    resumeBtn.style.background = "#444";
+    resumeBtn.style.marginTop = "8px";
+    resumeBtn.textContent = `Resume: ${saved.session_name || "Last Session"} (${saved.hands.length} hands)`;
+    resumeBtn.addEventListener("click", () => loadSession(saved));
+    els.uploadZone.parentElement.insertBefore(resumeBtn, els.uploadZone.nextSibling);
+  }
+
   showScreen("upload");
 
 })();
