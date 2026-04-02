@@ -408,6 +408,7 @@
   .seat-action.raise { background: #664400; color: #fda; }
   .seat-action.all-in { background: #663366; color: #faf; }
   .seat-action.blind { background: #333355; color: #aaf; }
+  .seat-action.straddle { background: #553333; color: #faa; }
 
   /* Big center-table action pop-up */
   .action-popup {
@@ -1418,9 +1419,10 @@
       if (callout) {
         let text = callout.action;
         if (callout.action === "blind") {
-          // Show as "SB 2" or "BB 5"
           const pos = player.position || "";
           text = pos === "SB" ? `SB ${callout.amount}` : pos === "BB" ? `BB ${callout.amount}` : `Blind ${callout.amount}`;
+        } else if (callout.action === "straddle") {
+          text = `Straddle ${callout.amount}`;
         } else if (callout.amount && callout.action !== "fold" && callout.action !== "check") {
           text += ` ${callout.amount}`;
         } else if (callout.action === "check") {
@@ -2080,6 +2082,7 @@
       stacks,
       smallBlind: (hand.blinds || session.blinds).small,
       bigBlind: (hand.blinds || session.blinds).big,
+      straddles: hand.straddles || (hand.blinds || {}).straddles || [],
       playerNames,
       defaultStack: 1000,
       handNumber: hand.hand_id || idx + 1
@@ -2097,13 +2100,21 @@
     }
     playback.currentStreet = "preflop";
 
-    // Show blind posting badges so viewers see SB/BB posted
+    // Show blind posting badges so viewers see SB/BB/straddle posted
     const sbSeat = PE.findSeatByPosition(playback.players, "SB");
     const bbSeat = PE.findSeatByPosition(playback.players, "BB");
     const sb = (hand.blinds || session.blinds).small;
     const bb = (hand.blinds || session.blinds).big;
     if (sbSeat >= 0) playback.actionCallouts[sbSeat] = { action: "blind", amount: sb };
     if (bbSeat >= 0) playback.actionCallouts[bbSeat] = { action: "blind", amount: bb };
+    // Straddle badges
+    const handStraddles = hand.straddles || (hand.blinds || {}).straddles || [];
+    for (const straddle of handStraddles) {
+      const straddleSeatIdx = (straddle.seat || 0) - 1;
+      if (straddleSeatIdx >= 0) {
+        playback.actionCallouts[straddleSeatIdx] = { action: "straddle", amount: straddle.amount || bb * 2 };
+      }
+    }
 
     // Capture preflop snapshot
     PE.captureStreetSnapshot("preflop", [], playback.players, playback.tableState);

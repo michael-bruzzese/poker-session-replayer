@@ -408,6 +408,7 @@
   .seat-action.raise { background: #664400; color: #fda; }
   .seat-action.all-in { background: #663366; color: #faf; }
   .seat-action.blind { background: #333355; color: #aaf; }
+  .seat-action.straddle { background: #553333; color: #faa; }
 
   /* Big center-table action pop-up */
   .action-popup {
@@ -1471,6 +1472,12 @@ const PokerEngine = (() => {
 
   function firstActionSeatForStreet(street, players, tableState, seatCount) {
     if (street === "preflop") {
+      // If straddle is active, action starts after the last straddle poster
+      // (postBlinds already set the correct actionSeat, use lastAggressorSeat)
+      const lastBlindSeat = tableState.lastAggressorSeat;
+      if (lastBlindSeat >= 0) {
+        return firstActiveSeatFrom(seatAtOffset(lastBlindSeat, 1, seatCount), players, seatCount);
+      }
       const bbSeat = findSeatByPosition(players, "BB");
       if (bbSeat < 0) return -1;
       return firstActiveSeatFrom(seatAtOffset(bbSeat, 1, seatCount), players, seatCount);
@@ -1871,21 +1878,49 @@ const PokerEngine = (() => {
     return amount;
   }
 
-  function postBlinds(players, tableState, seatCount, smallBlind, bigBlind) {
+  /**
+   * Post blinds and optional straddles.
+   * @param {Array} players
+   * @param {Object} tableState
+   * @param {number} seatCount
+   * @param {number} smallBlind
+   * @param {number} bigBlind
+   * @param {Array} [straddles] - [{ seat (0-based), amount }] in posting order
+   */
+  function postBlinds(players, tableState, seatCount, smallBlind, bigBlind, straddles) {
     const sbSeat = findSeatByPosition(players, "SB");
     const bbSeat = findSeatByPosition(players, "BB");
     if (sbSeat < 0 || bbSeat < 0) return;
 
     postBlindForSeat(sbSeat, smallBlind, players);
     postBlindForSeat(bbSeat, bigBlind, players);
+
+    // Track the last forced blind poster and the effective "big blind" amount
+    let lastBlindSeat = bbSeat;
+    let effectiveBigBlind = bigBlind;
+
+    // Post straddles (any position, any number)
+    if (Array.isArray(straddles) && straddles.length > 0) {
+      for (const straddle of straddles) {
+        const straddleSeat = straddle.seat;
+        const straddleAmount = straddle.amount || effectiveBigBlind * 2;
+        postBlindForSeat(straddleSeat, straddleAmount, players);
+        lastBlindSeat = straddleSeat;
+        effectiveBigBlind = straddleAmount;
+      }
+    }
+
     recomputePotAndToCall(players, tableState);
 
-    tableState.minRaiseTo = tableState.toCall + bigBlind;
-    tableState.lastAggressorSeat = bbSeat;
-    tableState.lastFullRaiseSize = bigBlind;
-    tableState.actionSeat = seatAtOffset(bbSeat, 1, seatCount);
+    tableState.minRaiseTo = tableState.toCall + effectiveBigBlind;
+    tableState.lastAggressorSeat = lastBlindSeat;
+    tableState.lastFullRaiseSize = effectiveBigBlind;
+    // Action starts after the last blind/straddle poster
+    tableState.actionSeat = seatAtOffset(lastBlindSeat, 1, seatCount);
     tableState.pendingActionSeats = [];
     tableState.betInputTo = tableState.minRaiseTo;
+    tableState.straddleActive = Array.isArray(straddles) && straddles.length > 0;
+    tableState.effectiveBigBlind = effectiveBigBlind;
   }
 
   // ---- Snapshots ----
@@ -1927,6 +1962,7 @@ const PokerEngine = (() => {
    * @param {Object} opts.stacks - { seatNumber: chipCount }
    * @param {number} opts.smallBlind
    * @param {number} opts.bigBlind
+   * @param {Array} [opts.straddles] - [{ seat (1-based), amount }]
    * @param {Object} opts.playerNames - { seatNumber: { name, description } }
    * @param {string[]} [opts.positionArray] - override position labels
    * @returns {{ players: Array, tableState: Object }}
@@ -1952,8 +1988,13 @@ const PokerEngine = (() => {
       handNumber: opts.handNumber || 0
     });
 
-    // Post blinds
-    postBlinds(players, tableState, sc, opts.smallBlind || 5, opts.bigBlind || 10);
+    // Post blinds and straddles
+    // Convert straddle seats from 1-based to 0-based
+    const straddles = (opts.straddles || []).map(s => ({
+      seat: (s.seat || 0) - 1,
+      amount: s.amount
+    })).filter(s => s.seat >= 0);
+    postBlinds(players, tableState, sc, opts.smallBlind || 5, opts.bigBlind || 10, straddles);
     resetPendingActionSeatsFrom(tableState.actionSeat, players, tableState, sc);
 
     return { players, tableState };
@@ -3787,9 +3828,10 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       if (callout) {
         let text = callout.action;
         if (callout.action === "blind") {
-          // Show as "SB 2" or "BB 5"
           const pos = player.position || "";
           text = pos === "SB" ? `SB ${callout.amount}` : pos === "BB" ? `BB ${callout.amount}` : `Blind ${callout.amount}`;
+        } else if (callout.action === "straddle") {
+          text = `Straddle ${callout.amount}`;
         } else if (callout.amount && callout.action !== "fold" && callout.action !== "check") {
           text += ` ${callout.amount}`;
         } else if (callout.action === "check") {
@@ -4449,6 +4491,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       stacks,
       smallBlind: (hand.blinds || session.blinds).small,
       bigBlind: (hand.blinds || session.blinds).big,
+      straddles: hand.straddles || (hand.blinds || {}).straddles || [],
       playerNames,
       defaultStack: 1000,
       handNumber: hand.hand_id || idx + 1
@@ -4466,13 +4509,21 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     }
     playback.currentStreet = "preflop";
 
-    // Show blind posting badges so viewers see SB/BB posted
+    // Show blind posting badges so viewers see SB/BB/straddle posted
     const sbSeat = PE.findSeatByPosition(playback.players, "SB");
     const bbSeat = PE.findSeatByPosition(playback.players, "BB");
     const sb = (hand.blinds || session.blinds).small;
     const bb = (hand.blinds || session.blinds).big;
     if (sbSeat >= 0) playback.actionCallouts[sbSeat] = { action: "blind", amount: sb };
     if (bbSeat >= 0) playback.actionCallouts[bbSeat] = { action: "blind", amount: bb };
+    // Straddle badges
+    const handStraddles = hand.straddles || (hand.blinds || {}).straddles || [];
+    for (const straddle of handStraddles) {
+      const straddleSeatIdx = (straddle.seat || 0) - 1;
+      if (straddleSeatIdx >= 0) {
+        playback.actionCallouts[straddleSeatIdx] = { action: "straddle", amount: straddle.amount || bb * 2 };
+      }
+    }
 
     // Capture preflop snapshot
     PE.captureStreetSnapshot("preflop", [], playback.players, playback.tableState);

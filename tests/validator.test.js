@@ -680,6 +680,47 @@ describe("Engine — Side Pots", () => {
     expect(tableState.pots[2].eligible).toContain(2);
   });
 
+  it("handles straddle — action starts after straddler", () => {
+    const PE = PokerEngine;
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500,
+      smallBlind: 2, bigBlind: 5,
+      straddles: [{ seat: 4, amount: 10 }]  // seat 4 (1-based) = UTG straddles to 10
+    });
+    const { players, tableState } = init;
+
+    // Blinds + straddle posted: SB 2 + BB 5 + straddle 10 = 17
+    expect(tableState.pot).toBe(17);
+    // Straddle seat (idx 3) should have 10 committed
+    const straddler = PE.getPlayerBySeat(players, 3);
+    expect(straddler.committedHand).toBe(10);
+    // Action should start AFTER the straddler, not after BB
+    expect(tableState.actionSeat).not.toBe(PE.findSeatByPosition(players, "BB") + 1);
+    // Effective big blind should be the straddle amount
+    expect(tableState.effectiveBigBlind).toBe(10);
+    // Min raise should be straddle + straddle = 20
+    expect(tableState.minRaiseTo).toBe(20);
+  });
+
+  it("handles multiple straddles", () => {
+    const PE = PokerEngine;
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500,
+      smallBlind: 2, bigBlind: 5,
+      straddles: [
+        { seat: 4, amount: 10 },  // UTG straddles to 10
+        { seat: 5, amount: 20 }   // UTG+1 re-straddles to 20
+      ]
+    });
+    const { tableState } = init;
+    // SB 2 + BB 5 + straddle 10 + re-straddle 20 = 37
+    expect(tableState.pot).toBe(37);
+    expect(tableState.effectiveBigBlind).toBe(20);
+    expect(tableState.minRaiseTo).toBe(40);
+  });
+
   it("includes folded player contributions in pots", () => {
     const PE = PokerEngine;
     const players = [
