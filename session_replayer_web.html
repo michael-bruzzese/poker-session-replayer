@@ -1571,6 +1571,7 @@
 
   // Chips placed in front of each seat (key: seat index, value: DOM element)
   const seatBetChipEls = {};
+  let chipUpdatesSuppressed = false; // true during rake animation
 
   // Offset from seat center toward the table center for chip placement
   // Offsets push chips well onto the felt, toward the table center
@@ -1639,9 +1640,12 @@
       return;
     }
 
+    chipUpdatesSuppressed = true; // prevent render() from re-placing chips during animation
+
     const feltRect = els.tableFelt.getBoundingClientRect();
     if (feltRect.width === 0) {
       clearAllBetChips();
+      chipUpdatesSuppressed = false;
       if (onComplete) onComplete();
       return;
     }
@@ -1662,6 +1666,7 @@
       setTimeout(() => {
         chipEls.forEach((el) => el.remove());
         Object.keys(seatBetChipEls).forEach((k) => delete seatBetChipEls[k]);
+        chipUpdatesSuppressed = false;
         if (onComplete) onComplete();
       }, 350);
     }, 450);
@@ -1673,7 +1678,8 @@
   }
 
   function updateSeatBetChips() {
-    // Place/update chips for each player's current street commitment
+    // Don't place new chips while the rake animation is running
+    if (chipUpdatesSuppressed) return;
     if (!playback.players.length) return;
     for (let i = 0; i < SEAT_COUNT; i++) {
       const player = PE.getPlayerBySeat(playback.players, i);
@@ -1910,6 +1916,7 @@
     if (playback.currentStepIndex >= playback.totalSteps - 1) {
       stepAnimating = true;
       rakeChipsToPot(() => {
+        clearAllBetChips();
         playback.currentStreet = "showdown";
         playback.tableState.actionSeat = -1;
         showStreetBanner("SHOWDOWN");
@@ -1927,11 +1934,13 @@
     stepAnimating = true;
 
     if (needsStreetTransition) {
-      // Street transition: rake chips to pot → show banner → deal cards → apply action
+      // Street transition: rake chips to pot → clear → show banner → deal cards → apply action
       rakeChipsToPot(() => {
+        clearAllBetChips(); // ensure all chip elements are gone before new street
         transitionToStreet(newStreet);
         renderBoard();
         renderStatus();
+        renderDealerButton();
         showStreetBanner(newStreet.toUpperCase());
 
         setTimeout(() => {
