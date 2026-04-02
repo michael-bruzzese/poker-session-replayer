@@ -175,7 +175,7 @@
     aspect-ratio: 1.8 / 1;
     max-height: 100%;
     background: radial-gradient(ellipse at center, var(--felt-green) 0%, var(--felt-dark) 100%);
-    border-radius: 40% / 50%;
+    border-radius: 25% / 45%;
     border: 6px solid #2a1a0a;
     box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(0,0,0,0.3);
   }
@@ -564,15 +564,16 @@
   }
 
   /* 9-seat positions (percentages of felt) */
+  /* 9 seats evenly distributed around the table */
   .seat[data-visual="bottom-center"] { left: 50%; top: 102%; }
-  .seat[data-visual="bottom-left"]   { left: 19%; top: 95%; }
-  .seat[data-visual="mid-left"]      { left: -1%; top: 58%; }
-  .seat[data-visual="top-left"]      { left: 5%;  top: 18%; }
-  .seat[data-visual="top-left-center"]  { left: 30%; top: 0%; }
-  .seat[data-visual="top-center"]    { left: 50%; top: -3%; }
-  .seat[data-visual="top-right-center"] { left: 70%; top: 0%; }
-  .seat[data-visual="top-right"]     { left: 95%; top: 18%; }
-  .seat[data-visual="mid-right"]     { left: 101%; top: 58%; }
+  .seat[data-visual="bottom-left"]   { left: 16%; top: 88%; }
+  .seat[data-visual="mid-left"]      { left: -2%; top: 50%; }
+  .seat[data-visual="top-left"]      { left: 16%; top: 12%; }
+  .seat[data-visual="top-left-center"]  { left: 38%; top: -3%; }
+  .seat[data-visual="top-center"]    { left: 62%; top: -3%; }
+  .seat[data-visual="top-right-center"] { left: 84%; top: 12%; }
+  .seat[data-visual="top-right"]     { left: 102%; top: 50%; }
+  .seat[data-visual="mid-right"]     { left: 84%; top: 88%; }
 
   /* ---- Status Bar ---- */
   .status-bar {
@@ -3858,18 +3859,17 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   let chipUpdatesSuppressed = false; // true during rake animation
 
   // Offset from seat center toward the table center for chip placement
-  // Offsets push chips well onto the felt, toward the table center
-  // These are relative to seat center — large enough to clear the seat chip entirely
+  // Offsets push chips onto the felt, toward the table center
   const CHIP_OFFSETS_9 = [
-    { dx: 0, dy: -75 },    // seat 0 (bottom-center) → up onto felt
-    { dx: 50, dy: -60 },   // seat 1 (bottom-left) → up-right onto felt
-    { dx: 65, dy: -10 },   // seat 2 (mid-left) → right onto felt
-    { dx: 50, dy: 55 },    // seat 3 (top-left) → down-right onto felt
-    { dx: 25, dy: 65 },    // seat 4 (top-left-center) → down onto felt
-    { dx: 0, dy: 70 },     // seat 5 (top-center) → down onto felt
-    { dx: -25, dy: 65 },   // seat 6 (top-right-center) → down onto felt
-    { dx: -50, dy: 55 },   // seat 7 (top-right) → down-left onto felt
-    { dx: -65, dy: -10 }   // seat 8 (mid-right) → left onto felt
+    { dx: 0, dy: -75 },    // seat 0 (bottom-center) → up
+    { dx: 50, dy: -55 },   // seat 1 (bottom-left) → up-right
+    { dx: 65, dy: 0 },     // seat 2 (mid-left) → right
+    { dx: 50, dy: 55 },    // seat 3 (top-left) → down-right
+    { dx: 20, dy: 65 },    // seat 4 (top-left-center) → down
+    { dx: -20, dy: 65 },   // seat 5 (top-center) → down
+    { dx: -50, dy: 55 },   // seat 6 (top-right-center) → down-left
+    { dx: -65, dy: 0 },    // seat 7 (top-right) → left
+    { dx: -50, dy: -55 }   // seat 8 (mid-right) → up-left
   ];
 
   function placeBetChipAtSeat(seat, amount) {
@@ -4433,15 +4433,15 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   // ---- Dealer Button ----
 
   const DEALER_BTN_OFFSETS_9 = [
-    { dx: -40, dy: -25 },   // seat 0 (bottom-center) → up-left
-    { dx: 30, dy: -20 },    // seat 1 (bottom-left) → up-right
-    { dx: 35, dy: -5 },     // seat 2 (mid-left) → right
-    { dx: 30, dy: 25 },     // seat 3 (top-left) → down-right
-    { dx: 15, dy: 35 },     // seat 4 (top-left-center) → down
-    { dx: 0, dy: 40 },      // seat 5 (top-center) → down
-    { dx: -15, dy: 35 },    // seat 6 (top-right-center) → down
-    { dx: -30, dy: 25 },    // seat 7 (top-right) → down-left
-    { dx: -35, dy: -5 }     // seat 8 (mid-right) → left
+    { dx: -40, dy: -25 },   // seat 0 (bottom-center)
+    { dx: 35, dy: -20 },    // seat 1 (bottom-left)
+    { dx: 38, dy: 0 },      // seat 2 (mid-left)
+    { dx: 35, dy: 25 },     // seat 3 (top-left)
+    { dx: 15, dy: 35 },     // seat 4 (top-left-center)
+    { dx: -15, dy: 35 },    // seat 5 (top-center)
+    { dx: -35, dy: 25 },    // seat 6 (top-right-center)
+    { dx: -38, dy: 0 },     // seat 7 (top-right)
+    { dx: -35, dy: -20 }    // seat 8 (mid-right)
   ];
 
   function renderDealerButton() {
