@@ -449,6 +449,90 @@
   }
   .demo-btn:hover { background: #3a8fff; }
 
+  /* ---- Review Screen ---- */
+  .review-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .review-list {
+    width: 300px;
+    border-right: 1px solid var(--panel-border);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .review-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .review-item:hover { background: #222233; }
+  .review-item.active { background: #1a3a5c; border-left: 3px solid var(--btn-primary); }
+  .review-item.confirmed { border-left: 3px solid #2a8f2a; }
+  .review-item.needs-review { border-left: 3px solid #d44; }
+  .review-item .review-num { font-weight: 600; min-width: 32px; }
+  .review-item .review-summary { color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .review-item .review-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  }
+  .review-badge.ok { background: #1a3a1a; color: #5b5; }
+  .review-badge.warn { background: #5a3a1a; color: #fa5; }
+
+  .review-detail {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .review-detail h3 { font-size: 16px; margin-bottom: 12px; }
+  .review-section {
+    background: #1e1e2e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .review-section h4 {
+    font-size: 12px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 8px;
+  }
+  .review-field {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px;
+  }
+  .review-field label { color: var(--text-secondary); min-width: 80px; }
+  .review-field input, .review-field select {
+    padding: 4px 8px; background: #2a2a3e; border: 1px solid #555;
+    color: #eee; border-radius: 4px; font-size: 13px;
+  }
+  .review-field input { width: 120px; }
+  .review-action-line {
+    font-size: 12px; padding: 4px 0; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .review-action-line .pos { color: var(--text-muted); min-width: 50px; }
+  .review-action-line .act { font-weight: 600; }
+  .review-action-line .act.fold { color: #f88; }
+  .review-action-line .act.check { color: #8f8; }
+  .review-action-line .act.call { color: #8f8; }
+  .review-action-line .act.bet { color: #fd8; }
+  .review-action-line .act.raise { color: #fd8; }
+  .review-action-line .act.all-in { color: #f8f; }
+  .review-warnings { color: #fa5; font-size: 12px; margin-top: 8px; }
+
+  .review-bar {
+    padding: 10px 16px;
+    border-top: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .review-bar .stats { font-size: 13px; color: var(--text-secondary); flex: 1; }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -517,6 +601,29 @@
   </div>
   <div style="margin-top:16px; display:flex; gap:12px;">
     <button id="qaFinishBtn" class="demo-btn" style="display:none;">Finish &amp; Load Session</button>
+  </div>
+</div>
+
+<!-- ============= REVIEW SCREEN ============= -->
+<div id="reviewScreen" class="screen">
+  <div class="top-bar">
+    <h1>Review Session</h1>
+    <span id="reviewSessionName" class="session-info"></span>
+    <div class="top-bar-controls">
+      <button id="reviewConfirmAllBtn" style="background:var(--btn-success); border-color:var(--btn-success);">Confirm All</button>
+      <button id="reviewExportBtn">Export JSON</button>
+      <button id="reviewBackBtn">Back</button>
+    </div>
+  </div>
+  <div class="review-layout">
+    <div id="reviewList" class="review-list"></div>
+    <div id="reviewDetail" class="review-detail">
+      <p style="color:var(--text-muted); text-align:center; margin-top:40px;">Select a hand from the list to review.</p>
+    </div>
+  </div>
+  <div class="review-bar">
+    <span id="reviewStats" class="stats">0 hands | 0 confirmed | 0 need review</span>
+    <button id="reviewLaunchBtn" class="demo-btn">Launch Coaching Playback</button>
   </div>
 </div>
 
@@ -1489,6 +1596,15 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
     qaSubmitBtn: document.getElementById("qaSubmitBtn"),
     qaSkipBtn: document.getElementById("qaSkipBtn"),
     qaFinishBtn: document.getElementById("qaFinishBtn"),
+    reviewScreen: document.getElementById("reviewScreen"),
+    reviewSessionName: document.getElementById("reviewSessionName"),
+    reviewList: document.getElementById("reviewList"),
+    reviewDetail: document.getElementById("reviewDetail"),
+    reviewStats: document.getElementById("reviewStats"),
+    reviewConfirmAllBtn: document.getElementById("reviewConfirmAllBtn"),
+    reviewExportBtn: document.getElementById("reviewExportBtn"),
+    reviewBackBtn: document.getElementById("reviewBackBtn"),
+    reviewLaunchBtn: document.getElementById("reviewLaunchBtn"),
     sessionNameDisplay: document.getElementById("sessionNameDisplay"),
     toggleSidebarBtn: document.getElementById("toggleSidebarBtn"),
     loadNewBtn: document.getElementById("loadNewBtn"),
@@ -1530,6 +1646,7 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
     els.playbackScreen.classList.toggle("active", name === "playback");
     els.parseScreen.classList.toggle("active", name === "parse");
     els.qaScreen.classList.toggle("active", name === "qa");
+    els.reviewScreen.classList.toggle("active", name === "review");
   }
 
   // ---- Seat Rendering ----
@@ -2336,8 +2453,8 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
     qaState.currentIdx = 0;
 
     if (qaState.questions.length === 0) {
-      // No ambiguities — go straight to playback
-      loadSession(sessionData);
+      // No ambiguities — go to review
+      openReview(sessionData);
       return;
     }
 
@@ -2413,6 +2530,168 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
     renderQAQuestion();
   }
 
+  // ---- Review Screen ----
+
+  const reviewState = {
+    sessionData: null,
+    selectedHandIdx: -1
+  };
+
+  function openReview(sessionData) {
+    reviewState.sessionData = sessionData;
+    reviewState.selectedHandIdx = -1;
+    els.reviewSessionName.textContent = sessionData.session_name || "Unnamed Session";
+    renderReviewList();
+    renderReviewStats();
+    els.reviewDetail.innerHTML = '<p style="color:var(--text-muted); text-align:center; margin-top:40px;">Select a hand from the list to review.</p>';
+    showScreen("review");
+  }
+
+  function renderReviewList() {
+    const data = reviewState.sessionData;
+    if (!data) return;
+    els.reviewList.innerHTML = "";
+    data.hands.forEach((hand, idx) => {
+      const item = document.createElement("div");
+      const heroCards = (hand.hero_cards || []).map(CU.formatCard).join(" ") || "??";
+      const status = hand.status || "needs_review";
+      const warnings = (hand.warnings || []).length;
+      item.className = `review-item ${status === "confirmed" ? "confirmed" : "needs-review"} ${idx === reviewState.selectedHandIdx ? "active" : ""}`;
+      item.innerHTML = `
+        <span class="review-num">#${hand.hand_id || idx + 1}</span>
+        <span class="review-summary">${heroCards}</span>
+        ${warnings ? `<span class="review-badge warn">${warnings}!</span>` : `<span class="review-badge ok">OK</span>`}
+      `;
+      item.addEventListener("click", () => {
+        reviewState.selectedHandIdx = idx;
+        renderReviewList();
+        renderReviewDetail(idx);
+      });
+      els.reviewList.appendChild(item);
+    });
+  }
+
+  function renderReviewStats() {
+    const hands = reviewState.sessionData ? reviewState.sessionData.hands : [];
+    const confirmed = hands.filter(h => h.status === "confirmed").length;
+    const needsReview = hands.length - confirmed;
+    els.reviewStats.textContent = `${hands.length} hands | ${confirmed} confirmed | ${needsReview} need review`;
+  }
+
+  function renderReviewDetail(idx) {
+    const data = reviewState.sessionData;
+    if (!data || idx < 0 || idx >= data.hands.length) return;
+    const hand = data.hands[idx];
+    const hid = hand.hand_id || idx + 1;
+
+    let html = `<h3>Hand ${hid} ${hand.status === "confirmed" ? '<span style="color:#5b5">(Confirmed)</span>' : '<span style="color:#fa5">(Needs Review)</span>'}</h3>`;
+
+    // Hero info
+    html += `<div class="review-section"><h4>Hero</h4>`;
+    html += `<div class="review-field"><label>Cards:</label><input data-review-field="hero_cards" value="${(hand.hero_cards || []).join(" ")}"></div>`;
+    html += `<div class="review-field"><label>Seat:</label><input data-review-field="hero_seat" type="number" min="1" max="9" value="${hand.hero_seat || 1}" style="width:60px"></div>`;
+    html += `<div class="review-field"><label>Button:</label><input data-review-field="button_seat" type="number" min="1" max="9" value="${hand.button_seat || 1}" style="width:60px"></div>`;
+    html += `</div>`;
+
+    // Board
+    html += `<div class="review-section"><h4>Board</h4>`;
+    const board = hand.board || {};
+    html += `<div class="review-field"><label>Flop:</label><input data-review-field="board.flop" value="${(board.flop || []).join(" ")}"></div>`;
+    html += `<div class="review-field"><label>Turn:</label><input data-review-field="board.turn" value="${board.turn || ""}" style="width:60px"></div>`;
+    html += `<div class="review-field"><label>River:</label><input data-review-field="board.river" value="${board.river || ""}" style="width:60px"></div>`;
+    html += `</div>`;
+
+    // Action sequence
+    html += `<div class="review-section"><h4>Action</h4>`;
+    for (const streetBlock of (hand.action_sequence || [])) {
+      html += `<div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-top:8px; margin-bottom:4px;">${streetBlock.street}</div>`;
+      for (const action of (streetBlock.actions || [])) {
+        const amtStr = action.amount ? ` ${action.amount}` : "";
+        html += `<div class="review-action-line">
+          <span class="pos">${action.position || "S" + action.seat}</span>
+          <span class="act ${action.action}">${action.action}${amtStr}</span>
+        </div>`;
+      }
+    }
+    html += `</div>`;
+
+    // Result
+    if (hand.result) {
+      html += `<div class="review-section"><h4>Result</h4>`;
+      html += `<div style="font-size:13px;">${hand.result.notes || "No notes"} | Pot: ${hand.result.pot || "?"}</div>`;
+      html += `</div>`;
+    }
+
+    // Warnings
+    if (hand.warnings && hand.warnings.length) {
+      html += `<div class="review-warnings">`;
+      hand.warnings.forEach(w => { html += `<div>&#9888; ${w}</div>`; });
+      html += `</div>`;
+    }
+
+    // Confirm button
+    html += `<div style="margin-top:16px; display:flex; gap:12px;">`;
+    html += `<button class="demo-btn" onclick="window.__reviewConfirmHand(${idx})" style="background:var(--btn-success)">Confirm Hand</button>`;
+    html += `<button class="demo-btn" onclick="window.__reviewSaveEdits(${idx})" style="background:#555">Save Edits</button>`;
+    html += `</div>`;
+
+    els.reviewDetail.innerHTML = html;
+  }
+
+  // Expose review actions to inline onclick handlers
+  window.__reviewConfirmHand = function(idx) {
+    const hand = reviewState.sessionData.hands[idx];
+    if (hand) {
+      hand.status = "confirmed";
+      renderReviewList();
+      renderReviewStats();
+      renderReviewDetail(idx);
+    }
+  };
+
+  window.__reviewSaveEdits = function(idx) {
+    const hand = reviewState.sessionData.hands[idx];
+    if (!hand) return;
+
+    // Read edits from inputs
+    const inputs = els.reviewDetail.querySelectorAll("[data-review-field]");
+    inputs.forEach(input => {
+      const field = input.dataset.reviewField;
+      const val = input.value.trim();
+      const cardRegex = /[AKQJT2-9][shdc]/gi;
+
+      if (field === "hero_cards") {
+        const cards = val.match(cardRegex);
+        if (cards && cards.length >= 2) hand.hero_cards = cards.slice(0, 2).map(c => c[0].toUpperCase() + c[1].toLowerCase());
+      } else if (field === "hero_seat") {
+        hand.hero_seat = parseInt(val) || 1;
+      } else if (field === "button_seat") {
+        hand.button_seat = parseInt(val) || 1;
+      } else if (field === "board.flop") {
+        const cards = val.match(cardRegex);
+        if (cards && cards.length >= 3) {
+          if (!hand.board) hand.board = {};
+          hand.board.flop = cards.slice(0, 3).map(c => c[0].toUpperCase() + c[1].toLowerCase());
+        }
+      } else if (field === "board.turn") {
+        const cards = val.match(cardRegex);
+        if (cards) {
+          if (!hand.board) hand.board = {};
+          hand.board.turn = cards[0][0].toUpperCase() + cards[0][1].toLowerCase();
+        }
+      } else if (field === "board.river") {
+        const cards = val.match(cardRegex);
+        if (cards) {
+          if (!hand.board) hand.board = {};
+          hand.board.river = cards[0][0].toUpperCase() + cards[0][1].toLowerCase();
+        }
+      }
+    });
+
+    renderReviewList();
+    renderReviewDetail(idx);
+  };
+
   // ---- Event Handlers ----
 
   function setupEvents() {
@@ -2437,7 +2716,30 @@ if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
     els.qaSubmitBtn.addEventListener("click", submitQAAnswer);
     els.qaSkipBtn.addEventListener("click", skipQAQuestion);
     els.qaFinishBtn.addEventListener("click", () => {
-      if (qaState.sessionData) loadSession(qaState.sessionData);
+      if (qaState.sessionData) openReview(qaState.sessionData);
+    });
+
+    // Review screen
+    els.reviewConfirmAllBtn.addEventListener("click", () => {
+      if (!reviewState.sessionData) return;
+      reviewState.sessionData.hands.forEach(h => { h.status = "confirmed"; });
+      renderReviewList();
+      renderReviewStats();
+      if (reviewState.selectedHandIdx >= 0) renderReviewDetail(reviewState.selectedHandIdx);
+    });
+    els.reviewExportBtn.addEventListener("click", () => {
+      if (!reviewState.sessionData) return;
+      const blob = new Blob([JSON.stringify(reviewState.sessionData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (reviewState.sessionData.session_name || "session").replace(/[^a-z0-9]/gi, "_") + ".json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    els.reviewBackBtn.addEventListener("click", () => showScreen("upload"));
+    els.reviewLaunchBtn.addEventListener("click", () => {
+      if (reviewState.sessionData) loadSession(reviewState.sessionData);
     });
     els.qaInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") submitQAAnswer();
