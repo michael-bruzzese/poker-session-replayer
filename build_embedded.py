@@ -73,20 +73,24 @@ def build():
     with open(SOURCE_HTML, "r", encoding="utf-8") as f:
         html = f.read()
 
-    # Find card images
-    cards = find_card_images()
-    print(f"  Found {len(cards)} card images")
-
-    # Build card embedding script
-    card_entries = []
-    for fname, data_uri in sorted(cards.items()):
-        safe_key = fname.replace("\\", "\\\\").replace('"', '\\"')
-        card_entries.append(f'  "{safe_key}": "{data_uri}"')
-    card_script = (
-        '<script>\nwindow.__RTP_EMBEDDED_CARDS__ = {\n'
-        + ",\n".join(card_entries)
-        + "\n};\n</script>"
-    )
+    # Find card images — prefer pre-extracted embedded_cards.js from RTP Drillz
+    embedded_cards_file = os.path.join(SCRIPT_DIR, "embedded_cards.js")
+    if os.path.isfile(embedded_cards_file):
+        with open(embedded_cards_file, "r", encoding="utf-8") as f:
+            card_script = f"<script>\n{f.read()}\n</script>"
+        print(f"  Using pre-extracted card images from embedded_cards.js")
+    else:
+        cards = find_card_images()
+        print(f"  Found {len(cards)} card images from PNG directories")
+        card_entries = []
+        for fname, data_uri in sorted(cards.items()):
+            safe_key = fname.replace("\\", "\\\\").replace('"', '\\"')
+            card_entries.append(f'  "{safe_key}": "{data_uri}"')
+        card_script = (
+            '<script>\nwindow.__RTP_EMBEDDED_CARDS__ = {\n'
+            + ",\n".join(card_entries)
+            + "\n};\n</script>"
+        )
 
     # Read shared JS
     shared_js = read_shared_js()
