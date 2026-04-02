@@ -726,6 +726,7 @@
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
     <button id="pasteTextBtn" class="demo-btn" style="background:#555">Paste Session Notes</button>
+    <button id="learnShorthandBtn" class="demo-btn" style="background:#444; font-size:13px;">Teach Shorthand</button>
   </div>
 </div>
 
@@ -774,6 +775,38 @@
   </div>
   <div style="margin-top:16px; display:flex; gap:12px;">
     <button id="qaFinishBtn" class="demo-btn" style="display:none;">Finish &amp; Load Session</button>
+  </div>
+</div>
+
+<!-- ============= SHORTHAND LEARNER SCREEN ============= -->
+<div id="learnScreen" class="screen" style="padding:24px; align-items:center;">
+  <h2 style="font-size:22px; margin-bottom:8px;">Teach Your Shorthand</h2>
+  <p style="color:var(--text-secondary); max-width:600px; text-align:center; margin-bottom:16px; font-size:13px;">
+    Upload your raw shorthand notes alongside the correctly parsed JSON for the same session.
+    The system will learn your notation and use it to parse future sessions locally — no AI needed.
+  </p>
+  <div style="display:flex; gap:16px; width:min(90%,800px);">
+    <div style="flex:1;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Raw Shorthand Notes</label>
+      <textarea id="learnRawText" style="width:100%; height:250px; padding:10px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:6px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="Paste your raw shorthand notes here...&#10;&#10;hand 1&#10;AhKs btn, utg r15 hero c&#10;flop Qs9h2d x b30 c&#10;turn 7c x x&#10;..."></textarea>
+    </div>
+    <div style="flex:1;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Parsed Session JSON</label>
+      <textarea id="learnParsedJson" style="width:100%; height:250px; padding:10px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:6px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="Paste the correctly parsed JSON here..."></textarea>
+    </div>
+  </div>
+  <div style="display:flex; gap:12px; align-items:center; margin-top:12px;">
+    <label style="font-size:13px;">Profile Name:
+      <input id="learnProfileName" style="width:140px; padding:4px 8px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" value="default">
+    </label>
+    <button id="learnBtn" class="demo-btn">Learn Patterns</button>
+    <button id="learnParseBtn" class="demo-btn" style="background:#555">Parse with Profile</button>
+    <button id="learnBackBtn" class="demo-btn" style="background:#444">Back</button>
+  </div>
+  <div id="learnResults" style="margin-top:12px; font-size:13px; color:var(--text-secondary); max-width:600px;"></div>
+  <div style="margin-top:12px;">
+    <label style="font-size:12px; color:var(--text-muted);">Saved Profiles:</label>
+    <span id="learnProfileList" style="font-size:12px; color:var(--text-secondary);"></span>
   </div>
 </div>
 
@@ -1013,6 +1046,16 @@
     reviewExportBtn: document.getElementById("reviewExportBtn"),
     reviewBackBtn: document.getElementById("reviewBackBtn"),
     reviewLaunchBtn: document.getElementById("reviewLaunchBtn"),
+    learnScreen: document.getElementById("learnScreen"),
+    learnRawText: document.getElementById("learnRawText"),
+    learnParsedJson: document.getElementById("learnParsedJson"),
+    learnProfileName: document.getElementById("learnProfileName"),
+    learnBtn: document.getElementById("learnBtn"),
+    learnParseBtn: document.getElementById("learnParseBtn"),
+    learnBackBtn: document.getElementById("learnBackBtn"),
+    learnResults: document.getElementById("learnResults"),
+    learnProfileList: document.getElementById("learnProfileList"),
+    learnShorthandBtn: document.getElementById("learnShorthandBtn"),
     sessionNameDisplay: document.getElementById("sessionNameDisplay"),
     toggleSidebarBtn: document.getElementById("toggleSidebarBtn"),
     loadNewBtn: document.getElementById("loadNewBtn"),
@@ -1067,6 +1110,7 @@
     els.parseScreen.classList.toggle("active", name === "parse");
     els.qaScreen.classList.toggle("active", name === "qa");
     els.reviewScreen.classList.toggle("active", name === "review");
+    els.learnScreen.classList.toggle("active", name === "learn");
   }
 
   // ---- Seat Rendering ----
@@ -2356,6 +2400,15 @@
     renderReviewDetail(idx);
   };
 
+  // ---- Shorthand Profile List ----
+
+  function refreshLearnProfileList() {
+    const SL = window.ShorthandLearner;
+    if (!SL) { els.learnProfileList.textContent = "(learner not loaded)"; return; }
+    const profiles = SL.listProfiles();
+    els.learnProfileList.textContent = profiles.length ? profiles.join(", ") : "(none saved)";
+  }
+
   // ---- Event Handlers ----
 
   function setupEvents() {
@@ -2405,6 +2458,49 @@
     els.reviewLaunchBtn.addEventListener("click", () => {
       if (reviewState.sessionData) loadSession(reviewState.sessionData);
     });
+
+    // Shorthand learner
+    els.learnShorthandBtn.addEventListener("click", () => {
+      showScreen("learn");
+      refreshLearnProfileList();
+    });
+    els.learnBackBtn.addEventListener("click", () => showScreen("upload"));
+    els.learnBtn.addEventListener("click", () => {
+      const SL = window.ShorthandLearner;
+      if (!SL) { els.learnResults.textContent = "Shorthand learner not loaded."; return; }
+      const raw = els.learnRawText.value.trim();
+      const jsonText = els.learnParsedJson.value.trim();
+      if (!raw || !jsonText) { els.learnResults.textContent = "Paste both raw notes and parsed JSON."; return; }
+      let parsed;
+      try { parsed = JSON.parse(jsonText); } catch (e) { els.learnResults.textContent = "Invalid JSON: " + e.message; return; }
+      const name = els.learnProfileName.value.trim() || "default";
+      const result = SL.learnFromAlignment(raw, parsed, name);
+      els.learnResults.innerHTML =
+        `<strong>Learned!</strong> Profile: "${result.profileName}" | ` +
+        `Hands aligned: ${result.handsAligned}/${result.totalHands} | ` +
+        `Patterns found: ${result.matchCount} | ` +
+        `New actions: ${result.learnedActions} | New positions: ${result.learnedPositions}`;
+      refreshLearnProfileList();
+    });
+    els.learnParseBtn.addEventListener("click", () => {
+      const SL = window.ShorthandLearner;
+      if (!SL) { els.learnResults.textContent = "Shorthand learner not loaded."; return; }
+      const raw = els.learnRawText.value.trim();
+      if (!raw) { els.learnResults.textContent = "Paste raw notes to parse."; return; }
+      const name = els.learnProfileName.value.trim() || "default";
+      const result = SL.parseWithProfile(raw, name, {
+        blinds: { small: 2, big: 5 },
+        heroSeat: 1
+      });
+      els.learnResults.innerHTML =
+        `Parsed ${result.hands.length} hands using profile "${name}". ` +
+        `<button class="demo-btn" style="padding:4px 12px;font-size:12px;background:var(--btn-primary);" ` +
+        `onclick="window.__loadParsedFromLearn()">Load into Replayer</button>`;
+      window.__learnParsedResult = result;
+    });
+    window.__loadParsedFromLearn = function() {
+      if (window.__learnParsedResult) startQA(window.__learnParsedResult);
+    };
     els.qaInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") submitQAAnswer();
     });

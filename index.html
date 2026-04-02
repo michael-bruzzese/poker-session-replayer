@@ -726,6 +726,7 @@
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
     <button id="pasteTextBtn" class="demo-btn" style="background:#555">Paste Session Notes</button>
+    <button id="learnShorthandBtn" class="demo-btn" style="background:#444; font-size:13px;">Teach Shorthand</button>
   </div>
 </div>
 
@@ -774,6 +775,38 @@
   </div>
   <div style="margin-top:16px; display:flex; gap:12px;">
     <button id="qaFinishBtn" class="demo-btn" style="display:none;">Finish &amp; Load Session</button>
+  </div>
+</div>
+
+<!-- ============= SHORTHAND LEARNER SCREEN ============= -->
+<div id="learnScreen" class="screen" style="padding:24px; align-items:center;">
+  <h2 style="font-size:22px; margin-bottom:8px;">Teach Your Shorthand</h2>
+  <p style="color:var(--text-secondary); max-width:600px; text-align:center; margin-bottom:16px; font-size:13px;">
+    Upload your raw shorthand notes alongside the correctly parsed JSON for the same session.
+    The system will learn your notation and use it to parse future sessions locally — no AI needed.
+  </p>
+  <div style="display:flex; gap:16px; width:min(90%,800px);">
+    <div style="flex:1;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Raw Shorthand Notes</label>
+      <textarea id="learnRawText" style="width:100%; height:250px; padding:10px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:6px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="Paste your raw shorthand notes here...&#10;&#10;hand 1&#10;AhKs btn, utg r15 hero c&#10;flop Qs9h2d x b30 c&#10;turn 7c x x&#10;..."></textarea>
+    </div>
+    <div style="flex:1;">
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Parsed Session JSON</label>
+      <textarea id="learnParsedJson" style="width:100%; height:250px; padding:10px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:6px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="Paste the correctly parsed JSON here..."></textarea>
+    </div>
+  </div>
+  <div style="display:flex; gap:12px; align-items:center; margin-top:12px;">
+    <label style="font-size:13px;">Profile Name:
+      <input id="learnProfileName" style="width:140px; padding:4px 8px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" value="default">
+    </label>
+    <button id="learnBtn" class="demo-btn">Learn Patterns</button>
+    <button id="learnParseBtn" class="demo-btn" style="background:#555">Parse with Profile</button>
+    <button id="learnBackBtn" class="demo-btn" style="background:#444">Back</button>
+  </div>
+  <div id="learnResults" style="margin-top:12px; font-size:13px; color:var(--text-secondary); max-width:600px;"></div>
+  <div style="margin-top:12px;">
+    <label style="font-size:12px; color:var(--text-muted);">Saved Profiles:</label>
+    <span id="learnProfileList" style="font-size:12px; color:var(--text-secondary);"></span>
   </div>
 </div>
 
@@ -2258,6 +2291,505 @@ if (typeof module !== "undefined" && module.exports) {
 }
 if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
 
+
+// ---- shorthand_learner.js ----
+// Shorthand Learner
+// Learns a user's poker shorthand notation by comparing raw notes with parsed session JSON.
+// Stores learned patterns in localStorage for future local parsing without LLM.
+//
+// Workflow:
+// 1. User uploads raw shorthand notes + the correctly parsed JSON for the same session
+// 2. System aligns hands and extracts notation patterns
+// 3. Patterns stored as a "shorthand profile" in localStorage
+// 4. Future raw shorthand uploads get parsed locally using the profile
+
+const ShorthandLearner = (() => {
+  "use strict";
+
+  const STORAGE_KEY = "sessionReplayerShorthandProfiles";
+
+  // ---- Default patterns (common poker shorthand) ----
+
+  const DEFAULT_PATTERNS = {
+    actions: {
+      "f": "fold", "x": "check", "c": "call", "b": "bet",
+      "r": "raise", "ai": "all-in", "jam": "all-in", "shove": "all-in",
+      "limp": "call", "open": "raise", "3b": "raise", "3bet": "raise",
+      "4b": "raise", "4bet": "raise", "cbet": "bet", "cb": "bet",
+      "xr": "check-raise", "cr": "check-raise", "xc": "check-call",
+      "xf": "check-fold"
+    },
+    positions: {
+      "utg": "UTG", "utg1": "UTG+1", "utg+1": "UTG+1",
+      "utg2": "UTG+2", "utg+2": "UTG+2",
+      "lj": "LJ", "lo": "LJ", "lojack": "LJ",
+      "hj": "HJ", "hijack": "HJ",
+      "co": "CO", "cutoff": "CO", "cut": "CO",
+      "btn": "BTN", "bu": "BTN", "button": "BTN", "otb": "BTN",
+      "sb": "SB", "small": "SB",
+      "bb": "BB", "big": "BB",
+      "ep": "UTG", "ep1": "UTG", "ep2": "UTG+1", "ep3": "UTG+2",
+      "mp": "LJ", "mp1": "LJ", "mp2": "HJ",
+      "lp": "CO", "ip": "BTN"
+    },
+    ranks: {
+      "a": "A", "ace": "A", "k": "K", "king": "K",
+      "q": "Q", "queen": "Q", "j": "J", "jack": "J",
+      "t": "T", "ten": "T", "10": "T",
+      "9": "9", "8": "8", "7": "7", "6": "6",
+      "5": "5", "4": "4", "3": "3", "2": "2"
+    },
+    suits: {
+      "s": "s", "spade": "s", "spades": "s",
+      "h": "h", "heart": "h", "hearts": "h",
+      "d": "d", "diamond": "d", "diamonds": "d",
+      "c": "c", "club": "c", "clubs": "c"
+    },
+    handDelimiters: [
+      /hand\s*#?\s*\d+/i,
+      /next\s+hand/i,
+      /new\s+hand/i,
+      /---+/,
+      /\n\s*\n/
+    ],
+    streetMarkers: {
+      "pre": "preflop", "preflop": "preflop", "pf": "preflop",
+      "flop": "flop", "fl": "flop",
+      "turn": "turn", "tn": "turn", "tr": "turn",
+      "river": "river", "rv": "river", "ri": "river"
+    },
+    // User-specific patterns learned from alignment
+    custom: {}
+  };
+
+  // ---- Profile Management ----
+
+  function loadProfiles() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+
+  function saveProfiles(profiles) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+    } catch (e) { /* ignore */ }
+  }
+
+  function getProfile(name) {
+    const profiles = loadProfiles();
+    if (profiles[name]) {
+      // Merge with defaults
+      return mergePatterns(DEFAULT_PATTERNS, profiles[name]);
+    }
+    return { ...DEFAULT_PATTERNS };
+  }
+
+  function saveProfile(name, patterns) {
+    const profiles = loadProfiles();
+    profiles[name] = patterns;
+    saveProfiles(profiles);
+  }
+
+  function listProfiles() {
+    return Object.keys(loadProfiles());
+  }
+
+  function deleteProfile(name) {
+    const profiles = loadProfiles();
+    delete profiles[name];
+    saveProfiles(profiles);
+  }
+
+  function mergePatterns(base, override) {
+    const merged = {};
+    for (const key of Object.keys(base)) {
+      if (typeof base[key] === "object" && !Array.isArray(base[key])) {
+        merged[key] = { ...base[key], ...(override[key] || {}) };
+      } else if (Array.isArray(base[key])) {
+        merged[key] = [...base[key], ...(override[key] || [])];
+      } else {
+        merged[key] = override[key] !== undefined ? override[key] : base[key];
+      }
+    }
+    // Include any keys in override not in base
+    for (const key of Object.keys(override)) {
+      if (!(key in merged)) merged[key] = override[key];
+    }
+    return merged;
+  }
+
+  // ---- Learning: Align raw text with parsed JSON ----
+
+  /**
+   * Learn a user's shorthand by comparing raw notes with parsed session.
+   * @param {string} rawText - The user's raw shorthand notes
+   * @param {Object} parsedSession - The correctly parsed session JSON
+   * @param {string} profileName - Name for this shorthand profile
+   * @returns {Object} - Learned patterns and statistics
+   */
+  function learnFromAlignment(rawText, parsedSession, profileName) {
+    const hands = parsedSession.hands || [];
+    const learned = { actions: {}, positions: {}, cards: {}, custom: {} };
+    let matchCount = 0;
+
+    // Split raw text into hand chunks
+    const rawChunks = splitIntoHandChunks(rawText);
+
+    // Try to align each chunk with a parsed hand
+    const alignments = [];
+    for (let i = 0; i < Math.min(rawChunks.length, hands.length); i++) {
+      const chunk = rawChunks[i];
+      const hand = hands[i];
+      const alignment = alignHandChunk(chunk, hand);
+      alignments.push(alignment);
+      matchCount += alignment.matches;
+
+      // Extract learned patterns from this alignment
+      for (const [shorthand, canonical] of alignment.actionMappings) {
+        const key = shorthand.toLowerCase().trim();
+        if (key && canonical && key !== canonical) {
+          learned.actions[key] = canonical;
+        }
+      }
+      for (const [shorthand, canonical] of alignment.positionMappings) {
+        const key = shorthand.toLowerCase().trim();
+        if (key && canonical && key !== canonical.toLowerCase()) {
+          learned.positions[key] = canonical;
+        }
+      }
+      for (const [shorthand, canonical] of alignment.cardMappings) {
+        const key = shorthand.toLowerCase().trim();
+        if (key && canonical) {
+          learned.cards[key] = canonical;
+        }
+      }
+    }
+
+    // Save profile
+    const profile = {
+      actions: { ...DEFAULT_PATTERNS.actions, ...learned.actions },
+      positions: { ...DEFAULT_PATTERNS.positions, ...learned.positions },
+      custom: learned.custom,
+      learnedAt: new Date().toISOString(),
+      handsAligned: alignments.length,
+      matchCount
+    };
+
+    saveProfile(profileName || "default", profile);
+
+    return {
+      profileName: profileName || "default",
+      handsAligned: alignments.length,
+      totalHands: hands.length,
+      rawChunks: rawChunks.length,
+      matchCount,
+      learnedActions: Object.keys(learned.actions).length,
+      learnedPositions: Object.keys(learned.positions).length,
+      patterns: profile
+    };
+  }
+
+  // ---- Split raw text into hand-sized chunks ----
+
+  function splitIntoHandChunks(text) {
+    // Try multiple delimiter patterns
+    const delimiters = [
+      /(?=hand\s*#?\s*\d+)/gi,
+      /(?=next\s+hand)/gi,
+      /(?=new\s+hand)/gi,
+      /\n\s*\n/
+    ];
+
+    for (const delim of delimiters) {
+      const chunks = text.split(delim).map(s => s.trim()).filter(s => s.length > 5);
+      if (chunks.length > 1) return chunks;
+    }
+
+    // Fallback: treat whole text as one chunk
+    return [text.trim()];
+  }
+
+  // ---- Align a single chunk with a parsed hand ----
+
+  function alignHandChunk(chunk, hand) {
+    const result = {
+      matches: 0,
+      actionMappings: [],
+      positionMappings: [],
+      cardMappings: []
+    };
+
+    const chunkLower = chunk.toLowerCase();
+
+    // Try to find hero cards mentioned in the chunk
+    if (hand.hero_cards && hand.hero_cards.length === 2) {
+      for (const card of hand.hero_cards) {
+        const rank = card[0];
+        const suit = card[1];
+        // Look for various representations of this card
+        const patterns = cardSearchPatterns(rank, suit);
+        for (const pat of patterns) {
+          if (chunkLower.includes(pat.toLowerCase())) {
+            result.cardMappings.push([pat, card]);
+            result.matches++;
+            break;
+          }
+        }
+      }
+    }
+
+    // Try to find board cards
+    const board = hand.board || {};
+    const allBoard = [...(board.flop || []), board.turn, board.river].filter(Boolean);
+    for (const card of allBoard) {
+      const rank = card[0];
+      const suit = card[1];
+      const patterns = cardSearchPatterns(rank, suit);
+      for (const pat of patterns) {
+        if (chunkLower.includes(pat.toLowerCase())) {
+          result.cardMappings.push([pat, card]);
+          result.matches++;
+          break;
+        }
+      }
+    }
+
+    // Try to find action words
+    const allActions = (hand.action_sequence || []).flatMap(s => s.actions || []);
+    const actionWords = extractWords(chunk);
+
+    for (const action of allActions) {
+      const canonical = action.action;
+      // Look for words in the chunk that might map to this action
+      for (const word of actionWords) {
+        const wordLower = word.toLowerCase();
+        if (wordLower === canonical) continue; // exact match, nothing to learn
+        // Check if this word could be a shorthand for the action
+        if (isLikelyActionShorthand(wordLower, canonical)) {
+          result.actionMappings.push([wordLower, canonical]);
+          result.matches++;
+        }
+      }
+
+      // Check position mappings
+      if (action.position) {
+        for (const word of actionWords) {
+          const wordLower = word.toLowerCase();
+          if (isLikelyPositionShorthand(wordLower, action.position)) {
+            result.positionMappings.push([wordLower, action.position]);
+            result.matches++;
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  function cardSearchPatterns(rank, suit) {
+    const rankNames = { A: ["a", "ace"], K: ["k", "king"], Q: ["q", "queen"],
+      J: ["j", "jack"], T: ["t", "ten", "10"] };
+    const suitNames = { s: ["s", "spade", "spades"], h: ["h", "heart", "hearts"],
+      d: ["d", "diamond", "diamonds"], c: ["c", "club", "clubs"] };
+
+    const ranks = rankNames[rank] || [rank.toLowerCase()];
+    const suits = suitNames[suit] || [suit.toLowerCase()];
+    const patterns = [];
+
+    for (const r of ranks) {
+      for (const s of suits) {
+        patterns.push(r + s);
+        patterns.push(r + " of " + s);
+        patterns.push(r + " " + s);
+      }
+    }
+    return patterns;
+  }
+
+  function extractWords(text) {
+    return text.match(/[a-zA-Z0-9+]+/g) || [];
+  }
+
+  function isLikelyActionShorthand(word, canonical) {
+    // Check if word starts with first letter(s) of the action
+    if (word.length < 1 || word.length > 8) return false;
+    const c = canonical.toLowerCase();
+    if (word === c) return false;
+    // Common shorthand patterns
+    if (c === "fold" && (word === "f" || word === "muck")) return true;
+    if (c === "check" && (word === "x" || word === "chk")) return true;
+    if (c === "call" && (word === "c" || word === "flat")) return true;
+    if (c === "bet" && (word === "b" || word === "lead")) return true;
+    if (c === "raise" && (word === "r" || word === "bump" || word === "pop" || word.startsWith("3b") || word.startsWith("4b"))) return true;
+    if (c === "all-in" && (word === "ai" || word === "jam" || word === "shove" || word === "ship")) return true;
+    return false;
+  }
+
+  function isLikelyPositionShorthand(word, position) {
+    const pos = position.toLowerCase();
+    if (word === pos) return false;
+    const map = DEFAULT_PATTERNS.positions;
+    return map[word] === position;
+  }
+
+  // ---- Local Parsing Using Profile ----
+
+  /**
+   * Parse raw shorthand text using a learned profile.
+   * Returns partially structured hands (best effort, may need review).
+   * @param {string} rawText
+   * @param {string} profileName
+   * @param {Object} opts - { blinds, heroSeat }
+   * @returns {Object} - Session-like object with parsed hands
+   */
+  function parseWithProfile(rawText, profileName, opts) {
+    const profile = getProfile(profileName || "default");
+    const chunks = splitIntoHandChunks(rawText);
+    const hands = [];
+    const o = opts || {};
+
+    chunks.forEach((chunk, idx) => {
+      const hand = parseHandChunk(chunk, profile, idx + 1, o);
+      if (hand) hands.push(hand);
+    });
+
+    return {
+      version: 2,
+      app: "session-replayer",
+      session_name: o.sessionName || "Shorthand Parsed Session",
+      blinds: o.blinds || { small: 2, big: 5 },
+      players: {},
+      hand_count: hands.length,
+      hands,
+      flags: {
+        has_unresolved_ambiguities: hands.some(h => h.warnings && h.warnings.length),
+        confirmed_by_user: false,
+        parsed_with_profile: profileName || "default"
+      }
+    };
+  }
+
+  function parseHandChunk(chunk, profile, handNum, opts) {
+    const lines = chunk.split("\n").map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return null;
+
+    const hand = {
+      hand_id: handNum,
+      hand_label: `Hand ${handNum}`,
+      status: "needs_review",
+      hero_seat: opts.heroSeat || 1,
+      button_seat: 1,
+      blinds: opts.blinds || { small: 2, big: 5 },
+      stacks: {},
+      hero_cards: [],
+      known_villain_cards: {},
+      board: {},
+      action_sequence: [],
+      result: {},
+      warnings: [],
+      parse_confidence: 0.5
+    };
+
+    // Extract cards (look for 2-char card codes)
+    const cardRegex = /\b([AKQJT2-9][shdc])\b/gi;
+    const allCards = [];
+    let m;
+    while ((m = cardRegex.exec(chunk)) !== null) {
+      allCards.push(m[1][0].toUpperCase() + m[1][1].toLowerCase());
+    }
+
+    // First two cards are likely hero's
+    if (allCards.length >= 2) {
+      hand.hero_cards = allCards.slice(0, 2);
+    } else {
+      hand.warnings.push("Could not find hero cards");
+    }
+
+    // Next 3 cards = flop, next = turn, next = river
+    if (allCards.length >= 5) {
+      hand.board.flop = allCards.slice(2, 5);
+    }
+    if (allCards.length >= 6) {
+      hand.board.turn = allCards[5];
+    }
+    if (allCards.length >= 7) {
+      hand.board.river = allCards[6];
+    }
+
+    // Try to extract actions using profile
+    const actionPatterns = { ...DEFAULT_PATTERNS.actions, ...(profile.actions || {}) };
+    const posPatterns = { ...DEFAULT_PATTERNS.positions, ...(profile.positions || {}) };
+
+    // Look for action sequences: "position action amount"
+    const actionLineRegex = /\b(\w+)\s+(f|x|c|b|r|fold|check|call|bet|raise|ai|all-?in|jam|shove|limp|open|3bet?|4bet?|cbet?|cb|xr|xc|xf|cr)\s*(\d*)\b/gi;
+    const streetActions = { preflop: [], flop: [], turn: [], river: [] };
+    let currentStreet = "preflop";
+
+    // Check for street markers
+    const streetPatterns = { ...DEFAULT_PATTERNS.streetMarkers, ...(profile.streetMarkers || {}) };
+
+    for (const line of lines) {
+      const lineLower = line.toLowerCase();
+
+      // Check for street marker
+      for (const [marker, street] of Object.entries(streetPatterns)) {
+        if (lineLower.startsWith(marker + ":") || lineLower.startsWith(marker + " ") || lineLower === marker) {
+          currentStreet = street;
+          break;
+        }
+      }
+
+      // Extract actions from this line
+      let actionMatch;
+      const lineActionRegex = /\b(\w+)\s+(f|x|c|b|r|fold|check|call|bet|raise|ai|all-?in|jam|shove|limp|open)\s*(\d*)\b/gi;
+      while ((actionMatch = lineActionRegex.exec(line)) !== null) {
+        const posWord = actionMatch[1].toLowerCase();
+        const actWord = actionMatch[2].toLowerCase();
+        const amount = actionMatch[3] ? parseInt(actionMatch[3]) : undefined;
+
+        const position = posPatterns[posWord] || posWord.toUpperCase();
+        const action = actionPatterns[actWord] || actWord;
+
+        const entry = { seat: 0, position, action };
+        if (amount) entry.amount = amount;
+        streetActions[currentStreet].push(entry);
+      }
+    }
+
+    // Build action sequence
+    for (const [street, actions] of Object.entries(streetActions)) {
+      if (actions.length > 0) {
+        hand.action_sequence.push({ street, actions });
+      }
+    }
+
+    if (!hand.action_sequence.length) {
+      hand.warnings.push("Could not extract any actions");
+    }
+
+    return hand;
+  }
+
+  // ---- Public API ----
+
+  return {
+    DEFAULT_PATTERNS,
+    loadProfiles,
+    getProfile,
+    saveProfile,
+    listProfiles,
+    deleteProfile,
+    learnFromAlignment,
+    splitIntoHandChunks,
+    parseWithProfile
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = ShorthandLearner;
+if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
+
 </script>
 <script>
 /* ============================================================
@@ -2349,6 +2881,16 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     reviewExportBtn: document.getElementById("reviewExportBtn"),
     reviewBackBtn: document.getElementById("reviewBackBtn"),
     reviewLaunchBtn: document.getElementById("reviewLaunchBtn"),
+    learnScreen: document.getElementById("learnScreen"),
+    learnRawText: document.getElementById("learnRawText"),
+    learnParsedJson: document.getElementById("learnParsedJson"),
+    learnProfileName: document.getElementById("learnProfileName"),
+    learnBtn: document.getElementById("learnBtn"),
+    learnParseBtn: document.getElementById("learnParseBtn"),
+    learnBackBtn: document.getElementById("learnBackBtn"),
+    learnResults: document.getElementById("learnResults"),
+    learnProfileList: document.getElementById("learnProfileList"),
+    learnShorthandBtn: document.getElementById("learnShorthandBtn"),
     sessionNameDisplay: document.getElementById("sessionNameDisplay"),
     toggleSidebarBtn: document.getElementById("toggleSidebarBtn"),
     loadNewBtn: document.getElementById("loadNewBtn"),
@@ -2403,6 +2945,7 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     els.parseScreen.classList.toggle("active", name === "parse");
     els.qaScreen.classList.toggle("active", name === "qa");
     els.reviewScreen.classList.toggle("active", name === "review");
+    els.learnScreen.classList.toggle("active", name === "learn");
   }
 
   // ---- Seat Rendering ----
@@ -3692,6 +4235,15 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     renderReviewDetail(idx);
   };
 
+  // ---- Shorthand Profile List ----
+
+  function refreshLearnProfileList() {
+    const SL = window.ShorthandLearner;
+    if (!SL) { els.learnProfileList.textContent = "(learner not loaded)"; return; }
+    const profiles = SL.listProfiles();
+    els.learnProfileList.textContent = profiles.length ? profiles.join(", ") : "(none saved)";
+  }
+
   // ---- Event Handlers ----
 
   function setupEvents() {
@@ -3741,6 +4293,49 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     els.reviewLaunchBtn.addEventListener("click", () => {
       if (reviewState.sessionData) loadSession(reviewState.sessionData);
     });
+
+    // Shorthand learner
+    els.learnShorthandBtn.addEventListener("click", () => {
+      showScreen("learn");
+      refreshLearnProfileList();
+    });
+    els.learnBackBtn.addEventListener("click", () => showScreen("upload"));
+    els.learnBtn.addEventListener("click", () => {
+      const SL = window.ShorthandLearner;
+      if (!SL) { els.learnResults.textContent = "Shorthand learner not loaded."; return; }
+      const raw = els.learnRawText.value.trim();
+      const jsonText = els.learnParsedJson.value.trim();
+      if (!raw || !jsonText) { els.learnResults.textContent = "Paste both raw notes and parsed JSON."; return; }
+      let parsed;
+      try { parsed = JSON.parse(jsonText); } catch (e) { els.learnResults.textContent = "Invalid JSON: " + e.message; return; }
+      const name = els.learnProfileName.value.trim() || "default";
+      const result = SL.learnFromAlignment(raw, parsed, name);
+      els.learnResults.innerHTML =
+        `<strong>Learned!</strong> Profile: "${result.profileName}" | ` +
+        `Hands aligned: ${result.handsAligned}/${result.totalHands} | ` +
+        `Patterns found: ${result.matchCount} | ` +
+        `New actions: ${result.learnedActions} | New positions: ${result.learnedPositions}`;
+      refreshLearnProfileList();
+    });
+    els.learnParseBtn.addEventListener("click", () => {
+      const SL = window.ShorthandLearner;
+      if (!SL) { els.learnResults.textContent = "Shorthand learner not loaded."; return; }
+      const raw = els.learnRawText.value.trim();
+      if (!raw) { els.learnResults.textContent = "Paste raw notes to parse."; return; }
+      const name = els.learnProfileName.value.trim() || "default";
+      const result = SL.parseWithProfile(raw, name, {
+        blinds: { small: 2, big: 5 },
+        heroSeat: 1
+      });
+      els.learnResults.innerHTML =
+        `Parsed ${result.hands.length} hands using profile "${name}". ` +
+        `<button class="demo-btn" style="padding:4px 12px;font-size:12px;background:var(--btn-primary);" ` +
+        `onclick="window.__loadParsedFromLearn()">Load into Replayer</button>`;
+      window.__learnParsedResult = result;
+    });
+    window.__loadParsedFromLearn = function() {
+      if (window.__learnParsedResult) startQA(window.__learnParsedResult);
+    };
     els.qaInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") submitQAAnswer();
     });
