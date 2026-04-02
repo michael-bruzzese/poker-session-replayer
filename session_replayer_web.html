@@ -218,6 +218,40 @@
   .pot-chip.blue { background: linear-gradient(to bottom, #48f, #24a); }
   .pot-chip.black { background: linear-gradient(to bottom, #555, #222); }
 
+  /* Side pots display */
+  .side-pots {
+    position: absolute;
+    top: 72%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 5;
+    text-align: center;
+  }
+  .side-pot-item {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 3px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .side-pot-label {
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .side-pot-amount {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ddd;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .side-pot-item:first-child .side-pot-amount { color: #ffd700; }
+
   /* ---- Board Cards ---- */
   .board-cards {
     position: absolute;
@@ -1043,6 +1077,8 @@
             </div>
           </div>
           <div id="boardCards" class="board-cards"></div>
+          <!-- Side pots display -->
+          <div id="sidePots" class="side-pots"></div>
           <!-- Dealer button -->
           <div id="dealerBtn" class="dealer-btn" style="display:none;">D</div>
           <!-- Coaching time banner -->
@@ -1237,6 +1273,7 @@
     potAmount: document.getElementById("potAmount"),
     potChips: document.getElementById("potChips"),
     boardCards: document.getElementById("boardCards"),
+    sidePots: document.getElementById("sidePots"),
     dealerBtn: document.getElementById("dealerBtn"),
     coachingBanner: document.getElementById("coachingBanner"),
     streetBanner: document.getElementById("streetBanner"),
@@ -1846,12 +1883,14 @@
 
   function renderPotChips() {
     const pot = playback.tableState ? playback.tableState.pot : 0;
+    const pots = playback.tableState ? (playback.tableState.pots || []) : [];
     const bb = session.blinds.big || 10;
     els.potChips.innerHTML = "";
+    els.sidePots.innerHTML = "";
 
     if (pot <= 0) return;
 
-    // Scale: number of chips proportional to pot size in BBs, capped
+    // Main pot chip graphic
     const potBBs = Math.round(pot / bb);
     const colors = ["red", "green", "blue", "black"];
     const stackCount = Math.min(4, Math.max(1, Math.ceil(potBBs / 15)));
@@ -1866,6 +1905,23 @@
         stack.appendChild(chip);
       }
       els.potChips.appendChild(stack);
+    }
+
+    // Side pots display (only show when there are 2+ pots)
+    if (pots.length > 1) {
+      pots.forEach((p, idx) => {
+        const item = document.createElement("div");
+        item.className = "side-pot-item";
+        const label = document.createElement("div");
+        label.className = "side-pot-label";
+        label.textContent = idx === 0 ? "Main" : `Side ${idx}`;
+        const amount = document.createElement("div");
+        amount.className = "side-pot-amount";
+        amount.textContent = p.amount;
+        item.appendChild(label);
+        item.appendChild(amount);
+        els.sidePots.appendChild(item);
+      });
     }
   }
 

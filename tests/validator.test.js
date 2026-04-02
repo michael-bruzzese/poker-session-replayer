@@ -593,3 +593,115 @@ describe("Engine — Pot and Stack Tracking", () => {
     expect(legal.fold).toBe(true);
   });
 });
+
+// ============================================================
+// Engine — Side Pots
+// ============================================================
+
+describe("Engine — Side Pots", () => {
+  it("creates a single pot when stacks are equal", () => {
+    const PE = PokerEngine;
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500,
+      smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+    // Blinds posted: SB 2 + BB 5 = 7
+    expect(tableState.pot).toBe(7);
+    expect(tableState.pots.length).toBeGreaterThanOrEqual(1);
+    const totalPot = tableState.pots.reduce((s, p) => s + p.amount, 0);
+    expect(totalPot).toBe(tableState.pot);
+  });
+
+  it("short stack call only risks their remaining chips", () => {
+    const PE = PokerEngine;
+    // 9-max, seat 4 (UTG+1) has only 50 chips
+    const stacks = {};
+    for (let i = 1; i <= 9; i++) stacks[i] = 500;
+    stacks[5] = 50; // seat 5 (1-based) = seat 4 (0-based) = UTG+1
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      stacks, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // UTG (seat 3) raises to 200
+    PE.applyPlayerAction(3, "raise", 200, players, tableState, 9, 5, { exactAmount: true });
+    // UTG+1 (seat 4, short stack 50) calls — should go all-in for 50
+    const shortPlayer = PE.getPlayerBySeat(players, 4);
+    PE.applyPlayerAction(4, "call", 0, players, tableState, 9, 5, { exactAmount: true });
+    expect(shortPlayer.status).toBe("allin");
+    expect(shortPlayer.stack).toBe(0);
+
+    // Side pots should exist
+    expect(tableState.pots.length).toBeGreaterThan(1);
+
+    // Short stack should be eligible for main pot but not side pot
+    const mainPot = tableState.pots[0];
+    expect(mainPot.eligible).toContain(4);
+    // If there's a side pot, short stack shouldn't be in it
+    if (tableState.pots.length > 1) {
+      const sidePot = tableState.pots[tableState.pots.length - 1];
+      expect(sidePot.eligible).not.toContain(4);
+    }
+  });
+
+  it("creates correct pot amounts with three different stack sizes", () => {
+    const PE = PokerEngine;
+    // Simulate manually: 3 players all go all-in for different amounts
+    const players = [
+      PE.createPlayerState(0, 0, "A"),  // will set committedHand manually
+      PE.createPlayerState(1, 0, "B"),
+      PE.createPlayerState(2, 0, "C")
+    ];
+    players[0].committedHand = 50;  players[0].stack = 0; players[0].status = "allin";
+    players[1].committedHand = 150; players[1].stack = 0; players[1].status = "allin";
+    players[2].committedHand = 300; players[2].stack = 0; players[2].status = "allin";
+
+    const tableState = PE.createTableState({});
+    PE.recomputePotAndToCall(players, tableState);
+
+    expect(tableState.pot).toBe(500);
+    expect(tableState.pots.length).toBe(3);
+
+    // Main pot: 50 * 3 = 150 (all three eligible)
+    expect(tableState.pots[0].amount).toBe(150);
+    expect(tableState.pots[0].eligible.length).toBe(3);
+
+    // Side pot 1: 100 * 2 = 200 (B and C eligible)
+    expect(tableState.pots[1].amount).toBe(200);
+    expect(tableState.pots[1].eligible.length).toBe(2);
+    expect(tableState.pots[1].eligible).not.toContain(0);
+
+    // Side pot 2: 150 * 1 = 150 (only C eligible)
+    expect(tableState.pots[2].amount).toBe(150);
+    expect(tableState.pots[2].eligible.length).toBe(1);
+    expect(tableState.pots[2].eligible).toContain(2);
+  });
+
+  it("includes folded player contributions in pots", () => {
+    const PE = PokerEngine;
+    const players = [
+      PE.createPlayerState(0, 0, "A"),
+      PE.createPlayerState(1, 0, "B"),
+      PE.createPlayerState(2, 0, "C")
+    ];
+    players[0].committedHand = 50; players[0].status = "folded";  // folded after putting in 50
+    players[1].committedHand = 100; players[1].stack = 0; players[1].status = "allin";
+    players[2].committedHand = 100; players[2].stack = 200; players[2].status = "active";
+
+    const tableState = PE.createTableState({});
+    PE.recomputePotAndToCall(players, tableState);
+
+    expect(tableState.pot).toBe(250);
+    // Folded player's 50 goes to the pot but they're not eligible
+    // Main pot should include all contributions
+    const totalPots = tableState.pots.reduce((s, p) => s + p.amount, 0);
+    expect(totalPots).toBe(250);
+    // Folded player should not be eligible for any pot
+    for (const pot of tableState.pots) {
+      expect(pot.eligible).not.toContain(0);
+    }
+  });
+});

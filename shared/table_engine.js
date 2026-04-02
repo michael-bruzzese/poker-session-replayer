@@ -96,6 +96,7 @@ const PokerEngine = (() => {
       pendingHeadsUpAggressorSeat: -1,
       handNumber: o.handNumber || 0,
       betInputTo: 0,
+      pots: [],  // [{ amount, eligible: [seat numbers] }]
       streetSnapshots: {},
       preflopScript: [],
       preflopScriptName: ""
@@ -205,6 +206,81 @@ const PokerEngine = (() => {
     });
     tableState.pot = pot;
     tableState.toCall = toCall;
+    calculateSidePots(players, tableState);
+  }
+
+  /**
+   * Calculate side pots from player commitments.
+   * Each pot has an amount and a list of eligible seats.
+   * Example: Player A commits 100, Player B commits 200, Player C commits 200.
+   * Main pot: 300 (100 from each, all three eligible)
+   * Side pot: 200 (100 from B and C, only B and C eligible)
+   */
+  function calculateSidePots(players, tableState) {
+    // Get all non-folded players sorted by total hand commitment (ascending)
+    const contenders = players
+      .filter(p => p.status !== "folded")
+      .map(p => ({ seat: p.seat, committed: p.committedHand }))
+      .sort((a, b) => a.committed - b.committed);
+
+    // Also include folded players' contributions (they contributed but aren't eligible)
+    const foldedCommits = players
+      .filter(p => p.status === "folded")
+      .reduce((sum, p) => sum + p.committedHand, 0);
+
+    const pots = [];
+
+    if (contenders.length === 0) {
+      tableState.pots = [{ amount: tableState.pot, eligible: [] }];
+      return;
+    }
+
+    let previousLevel = 0;
+
+    for (let i = 0; i < contenders.length; i++) {
+      const level = contenders[i].committed;
+      if (level <= previousLevel) continue; // skip duplicate levels
+
+      const increment = level - previousLevel;
+
+      // Everyone at this level or above contributes 'increment' to this pot
+      // Plus folded players contribute their share up to this level
+      let potAmount = 0;
+
+      // Active/all-in players at or above this level
+      const eligible = [];
+      for (let j = i; j < contenders.length; j++) {
+        potAmount += increment;
+        eligible.push(contenders[j].seat);
+      }
+
+      // Players below this level who already contributed at previous levels
+      // are accounted for in earlier pots
+
+      // Folded player contributions up to this increment
+      // (they contributed to the pot but aren't eligible)
+      // We handle this by including folded contributions proportionally
+      // Actually simpler: total pot from all players at each level
+      let totalForThisLevel = 0;
+      for (const p of players) {
+        const contrib = Math.min(p.committedHand, level) - Math.min(p.committedHand, previousLevel);
+        if (contrib > 0) totalForThisLevel += contrib;
+      }
+
+      if (totalForThisLevel > 0) {
+        pots.push({ amount: totalForThisLevel, eligible: eligible.slice() });
+      }
+
+      previousLevel = level;
+    }
+
+    // If no pots were created but there's money in the pot (all folded), create one
+    if (pots.length === 0 && tableState.pot > 0) {
+      const remaining = players.filter(p => p.status !== "folded").map(p => p.seat);
+      pots.push({ amount: tableState.pot, eligible: remaining });
+    }
+
+    tableState.pots = pots;
   }
 
   function recomputeMinRaiseTo(tableState, bigBlind) {
@@ -290,7 +366,9 @@ const PokerEngine = (() => {
       if (!legal.check) return { success: false };
     } else if (action === "call") {
       if (!legal.call) return { success: false };
-      targetStreetCommit = player.committedStreet + toCall;
+      // Cap call at player's remaining stack (short-stack all-in call)
+      const callAmount = Math.min(toCall, player.stack);
+      targetStreetCommit = player.committedStreet + callAmount;
       actionCommit = applyCommittedChips(player, targetStreetCommit);
     } else if (action === "bet") {
       if (!legal.bet) return { success: false };
@@ -564,6 +642,7 @@ const PokerEngine = (() => {
 
     // Pot / betting math
     recomputePotAndToCall,
+    calculateSidePots,
     recomputeMinRaiseTo,
     roundToWholeBb,
 
