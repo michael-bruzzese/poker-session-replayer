@@ -272,7 +272,19 @@
 
   .seat-position { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .seat-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
-  .seat-stack { font-size: 20px; font-weight: 800; color: #7bed7b; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  .seat-stack { font-size: 20px; font-weight: 800; color: #7bed7b; text-shadow: 0 1px 3px rgba(0,0,0,0.4); cursor: pointer; }
+  .seat-stack:hover { text-decoration: underline; }
+  .seat-stack-edit {
+    width: 70px;
+    font-size: 16px;
+    font-weight: 800;
+    color: #7bed7b;
+    background: #1a1a2e;
+    border: 1px solid #7bed7b;
+    border-radius: 4px;
+    text-align: center;
+    padding: 2px;
+  }
   .seat-chipstack {
     display: flex;
     justify-content: center;
@@ -907,6 +919,7 @@
     <div style="display:flex; gap:12px; margin-top:12px;">
       <button id="qaSubmitBtn" class="demo-btn">Submit</button>
       <button id="qaSkipBtn" class="demo-btn" style="background:#555">Skip</button>
+      <button id="qaSkipAllBtn" class="demo-btn" style="background:#444; font-size:12px;">Skip All & Load</button>
     </div>
   </div>
   <div style="margin-top:16px; display:flex; gap:12px;">
@@ -1087,6 +1100,8 @@
           <button id="btnPrevStep" class="nav-btn" disabled>&lt;&lt; Prev</button>
           <button id="btnNextStep" class="nav-btn primary" disabled>Next &gt;&gt;</button>
           <button id="btnBackToScript" class="nav-btn warning" style="display:none">Back to Script</button>
+          <button id="btnNewTurn" class="nav-btn" style="display:none">New Turn</button>
+          <button id="btnNewRiver" class="nav-btn" style="display:none">New River</button>
           <button id="btnPrevHand" class="nav-btn" disabled>&lt; Hand</button>
           <button id="btnNextHand" class="nav-btn" disabled>Hand &gt;</button>
         </div>
@@ -1177,6 +1192,7 @@
     qaInput: document.getElementById("qaInput"),
     qaSubmitBtn: document.getElementById("qaSubmitBtn"),
     qaSkipBtn: document.getElementById("qaSkipBtn"),
+    qaSkipAllBtn: document.getElementById("qaSkipAllBtn"),
     qaFinishBtn: document.getElementById("qaFinishBtn"),
     reviewScreen: document.getElementById("reviewScreen"),
     reviewSessionName: document.getElementById("reviewSessionName"),
@@ -1241,6 +1257,8 @@
     btnPrevStep: document.getElementById("btnPrevStep"),
     btnNextStep: document.getElementById("btnNextStep"),
     btnBackToScript: document.getElementById("btnBackToScript"),
+    btnNewTurn: document.getElementById("btnNewTurn"),
+    btnNewRiver: document.getElementById("btnNewRiver"),
     btnPrevHand: document.getElementById("btnPrevHand"),
     btnNextHand: document.getElementById("btnNextHand"),
     seatElements: []
@@ -1278,6 +1296,10 @@
       `;
 
       seat.querySelector(".seat-chip").addEventListener("click", () => onSeatClicked(i));
+      seat.querySelector("[data-seat-stack]").addEventListener("click", (e) => {
+        e.stopPropagation();
+        onStackClicked(i);
+      });
       els.tableFelt.appendChild(seat);
       els.seatElements.push(seat);
     }
@@ -1497,10 +1519,17 @@
     const canTriggerShowdown = inScript && playback.currentStepIndex >= playback.totalSteps - 1 && playback.totalSteps > 0 && playback.currentStreet !== "showdown";
     const canAdvanceHand = inScript && playback.currentStreet === "showdown" && playback.currentHandIndex < session.hands.length - 1;
     els.btnNextStep.disabled = !(canAdvanceStep || canTriggerShowdown || canAdvanceHand);
-    els.btnPrevStep.disabled = !(inScript && playback.currentStepIndex >= 0);
+    const canGoBack = inScript && (playback.currentStepIndex >= 0 || playback.currentHandIndex > 0 || playback.currentStreet === "showdown");
+    els.btnPrevStep.disabled = !canGoBack;
     els.btnNextHand.disabled = !(hasSession && playback.currentHandIndex < session.hands.length - 1);
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
     els.btnBackToScript.style.display = inBranch ? "" : "none";
+
+    // New Turn / New River buttons — show when on the right street
+    const onFlop = playback.currentStreet === "flop";
+    const onTurn = playback.currentStreet === "turn";
+    els.btnNewTurn.style.display = onFlop ? "" : "none";
+    els.btnNewRiver.style.display = onTurn ? "" : "none";
 
     // Script mode acting prompt: show upcoming action hint
     if (inScript && !inBranch) {
@@ -2072,11 +2101,48 @@
 
   function prevStep() {
     if (playback.mode !== "script") return;
-    if (playback.currentStepIndex < 0) return;
 
-    // Rewind by replaying from hand start to targetStep - 1
+    // At showdown → go back to last action step
+    if (playback.currentStreet === "showdown") {
+      replayToStep(playback.totalSteps - 1);
+      render();
+      return;
+    }
+
+    // Before first action of this hand → go to previous hand's showdown
+    if (playback.currentStepIndex <= 0) {
+      if (playback.currentHandIndex > 0) {
+        loadHandAtShowdown(playback.currentHandIndex - 1);
+      }
+      return;
+    }
+
+    // Normal rewind within hand
     const targetStep = playback.currentStepIndex - 1;
     replayToStep(targetStep);
+    render();
+  }
+
+  function loadHandAtShowdown(idx) {
+    if (idx < 0 || idx >= session.hands.length) return;
+    loadHand(idx);
+    // Fast-forward to showdown — replay all steps
+    const bb = (session.hands[idx].blinds || session.blinds).big;
+    for (let i = 0; i < playback.flatActions.length; i++) {
+      const step = playback.flatActions[i];
+      const newStreet = step.street;
+      if (newStreet !== playback.currentStreet && newStreet !== "preflop") {
+        transitionToStreet(newStreet);
+      }
+      const seatIdx = (step.seat || 1) - 1;
+      playback.tableState.actionSeat = seatIdx;
+      PE.applyPlayerAction(seatIdx, PE.normalizeActionName(step.action), step.amount || 0,
+        playback.players, playback.tableState, SEAT_COUNT, bb, { exactAmount: true });
+    }
+    playback.currentStepIndex = playback.totalSteps - 1;
+    playback.currentStreet = "showdown";
+    playback.tableState.actionSeat = -1;
+    clearAllCallouts();
     render();
   }
 
@@ -2318,6 +2384,88 @@
         render();
       }
     }
+  }
+
+  // ---- Deal Random Street Card ----
+
+  function dealRandomStreetCard(street) {
+    if (playback.mode === "idle") return;
+
+    // Enter branch mode if in script
+    if (playback.mode === "script") {
+      enterBranchMode();
+      showCoachingBanner();
+    }
+
+    // Collect all known cards to exclude
+    const usedCards = new Set([
+      ...playback.heroCards,
+      ...playback.board,
+      ...Object.values(playback.knownVillainCards).flat()
+    ]);
+
+    // Build remaining deck
+    const CU_local = window.CardUtils;
+    const fullDeck = CU_local.buildFullDeck();
+    const available = fullDeck.filter(c => !usedCards.has(c));
+    if (!available.length) return;
+
+    // Pick random card
+    const randomCard = available[Math.floor(Math.random() * available.length)];
+
+    // Apply the card
+    const bb = session.blinds.big;
+    if (street === "turn" && playback.board.length === 3) {
+      playback.board.push(randomCard);
+      playback.currentStreet = "turn";
+      PE.beginStreetRound("turn", playback.players, playback.tableState, SEAT_COUNT, bb);
+      showStreetBanner("NEW TURN");
+    } else if (street === "river" && playback.board.length === 4) {
+      playback.board.push(randomCard);
+      playback.currentStreet = "river";
+      PE.beginStreetRound("river", playback.players, playback.tableState, SEAT_COUNT, bb);
+      showStreetBanner("NEW RIVER");
+    }
+
+    clearStreetCallouts();
+    clearAllBetChips();
+    render();
+  }
+
+  // ---- Click-to-Edit Stack ----
+
+  function onStackClicked(seatIdx) {
+    if (playback.mode === "idle") return;
+    const player = PE.getPlayerBySeat(playback.players, seatIdx);
+    if (!player) return;
+    const el = els.seatElements[seatIdx];
+    const stackEl = el.querySelector("[data-seat-stack]");
+    const currentVal = player.stack;
+
+    const input = document.createElement("input");
+    input.className = "seat-stack-edit";
+    input.type = "number";
+    input.value = currentVal;
+    input.min = 0;
+
+    stackEl.textContent = "";
+    stackEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+      const newVal = Math.max(0, Math.round(Number(input.value) || 0));
+      player.stack = newVal;
+      player.stackStart = newVal;
+      stackEl.textContent = newVal;
+      render();
+    }
+
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { stackEl.textContent = currentVal; }
+    });
   }
 
   // ---- Demo Session ----
@@ -2854,6 +3002,9 @@
     // Q&A screen
     els.qaSubmitBtn.addEventListener("click", submitQAAnswer);
     els.qaSkipBtn.addEventListener("click", skipQAQuestion);
+    els.qaSkipAllBtn.addEventListener("click", () => {
+      if (qaState.sessionData) openReview(qaState.sessionData);
+    });
     els.qaFinishBtn.addEventListener("click", () => {
       if (qaState.sessionData) openReview(qaState.sessionData);
     });
@@ -2967,6 +3118,8 @@
     els.btnBet.addEventListener("click", () => coachAction("bet", els.btnBet, Number(els.sizeInput.value)));
     els.btnRaise.addEventListener("click", () => coachAction("raise", els.btnRaise, Number(els.sizeInput.value)));
     els.btnAllIn.addEventListener("click", () => coachAction("all-in", els.btnAllIn));
+    els.btnNewTurn.addEventListener("click", () => dealRandomStreetCard("turn"));
+    els.btnNewRiver.addEventListener("click", () => dealRandomStreetCard("river"));
 
     // Enter on size input → auto bet/raise
     els.sizeInput.addEventListener("keydown", (e) => {
