@@ -272,7 +272,8 @@ const PokerEngine = (() => {
    * Apply a player action to the game state.
    * Returns { success, actionCommit, targetStreetCommit } or { success: false }.
    */
-  function applyPlayerAction(seat, action, sizeChips, players, tableState, seatCount, bigBlind) {
+  function applyPlayerAction(seat, action, sizeChips, players, tableState, seatCount, bigBlind, opts) {
+    const exactAmount = opts && opts.exactAmount;
     const player = getPlayerBySeat(players, seat);
     if (!player || player.status !== "active") return { success: false };
 
@@ -293,7 +294,7 @@ const PokerEngine = (() => {
       actionCommit = applyCommittedChips(player, targetStreetCommit);
     } else if (action === "bet") {
       if (!legal.bet) return { success: false };
-      const desired = Math.max(bigBlind, roundToWholeBb(sizeChips, bigBlind));
+      const desired = exactAmount ? Math.max(1, Math.round(Number(sizeChips) || 0)) : Math.max(bigBlind, roundToWholeBb(sizeChips, bigBlind));
       targetStreetCommit = Math.min(legal.maxCommit, desired);
       actionCommit = applyCommittedChips(player, targetStreetCommit);
       if (targetStreetCommit > priorToCall) {
@@ -303,7 +304,7 @@ const PokerEngine = (() => {
       }
     } else if (action === "raise") {
       if (!legal.raise) return { success: false };
-      const desired = roundToWholeBb(sizeChips, bigBlind);
+      const desired = exactAmount ? Math.round(Number(sizeChips) || 0) : roundToWholeBb(sizeChips, bigBlind);
       const minRaiseTo = tableState.minRaiseTo;
       const capped = Math.min(legal.maxCommit, desired);
       if (capped < minRaiseTo && legal.maxCommit > minRaiseTo) return { success: false };

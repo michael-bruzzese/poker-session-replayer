@@ -2006,7 +2006,8 @@
     const result = PE.applyPlayerAction(
       seatIdx, action, amount,
       playback.players, playback.tableState, SEAT_COUNT,
-      (session.hands[playback.currentHandIndex].blinds || session.blinds).big
+      (session.hands[playback.currentHandIndex].blinds || session.blinds).big,
+      { exactAmount: true }
     );
 
     if (result.success) {
@@ -2093,7 +2094,7 @@
       const seatIdx = (step.seat || 1) - 1;
       playback.tableState.actionSeat = seatIdx;
       PE.applyPlayerAction(seatIdx, PE.normalizeActionName(step.action), step.amount || 0,
-        playback.players, playback.tableState, SEAT_COUNT, bb);
+        playback.players, playback.tableState, SEAT_COUNT, bb, { exactAmount: true });
     }
 
     playback.currentStepIndex = targetStep;
@@ -2238,7 +2239,7 @@
     const seat = playback.tableState.actionSeat;
     const bb = session.blinds.big;
     const result = PE.applyPlayerAction(seat, action, sizeChips || 0,
-      playback.players, playback.tableState, SEAT_COUNT, bb);
+      playback.players, playback.tableState, SEAT_COUNT, bb, { exactAmount: true });
 
     if (result.success) {
       showActionCallout(seat, action, result.targetStreetCommit || sizeChips || 0);
