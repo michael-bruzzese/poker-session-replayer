@@ -1573,16 +1573,18 @@
   const seatBetChipEls = {};
 
   // Offset from seat center toward the table center for chip placement
+  // Offsets push chips well onto the felt, toward the table center
+  // These are relative to seat center — large enough to clear the seat chip entirely
   const CHIP_OFFSETS_9 = [
-    { dx: 0, dy: -45 },    // seat 0 (bottom-center) → up
-    { dx: 25, dy: -35 },   // seat 1 (bottom-left) → up-right
-    { dx: 30, dy: -15 },   // seat 2 (mid-left) → right
-    { dx: 25, dy: 20 },    // seat 3 (top-left) → down-right
-    { dx: 15, dy: 30 },    // seat 4 (top-left-center) → down
-    { dx: 0, dy: 35 },     // seat 5 (top-center) → down
-    { dx: -15, dy: 30 },   // seat 6 (top-right-center) → down
-    { dx: -25, dy: 20 },   // seat 7 (top-right) → down-left
-    { dx: -30, dy: -15 }   // seat 8 (mid-right) → left
+    { dx: 0, dy: -75 },    // seat 0 (bottom-center) → up onto felt
+    { dx: 50, dy: -60 },   // seat 1 (bottom-left) → up-right onto felt
+    { dx: 65, dy: -10 },   // seat 2 (mid-left) → right onto felt
+    { dx: 50, dy: 55 },    // seat 3 (top-left) → down-right onto felt
+    { dx: 25, dy: 65 },    // seat 4 (top-left-center) → down onto felt
+    { dx: 0, dy: 70 },     // seat 5 (top-center) → down onto felt
+    { dx: -25, dy: 65 },   // seat 6 (top-right-center) → down onto felt
+    { dx: -50, dy: 55 },   // seat 7 (top-right) → down-left onto felt
+    { dx: -65, dy: -10 }   // seat 8 (mid-right) → left onto felt
   ];
 
   function placeBetChipAtSeat(seat, amount) {
