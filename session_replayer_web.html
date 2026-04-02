@@ -1088,10 +1088,11 @@
     const symbol = CC.SUIT_SYMBOL[suit] || suit;
     const color = CC.SUIT_COLOR[suit] || "#000";
 
-    // Try embedded image first
-    const candidates = CU.cardImageCandidates(cardCode);
+    // Try embedded image — check bare key first (e.g. "Ah"), then candidates with extensions
+    const bareKey = formatted; // e.g. "Ah"
+    const keysToTry = [bareKey, ...CU.cardImageCandidates(cardCode)];
     let found = false;
-    for (const key of candidates) {
+    for (const key of keysToTry) {
       if (EMBEDDED_CARDS[key]) {
         const img = document.createElement("img");
         img.src = EMBEDDED_CARDS[key];
