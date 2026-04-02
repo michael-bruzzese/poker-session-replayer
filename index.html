@@ -322,6 +322,27 @@
   }
   .seat-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
 
+  /* Showdown: cards pop out big so viewers can see them */
+  .seat-cards.showdown {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 18;
+    gap: 5px;
+    margin-top: 0;
+    margin-bottom: 6px;
+  }
+  .seat-cards.showdown .seat-card {
+    width: 56px;
+    height: 80px;
+    border-radius: 6px;
+    border: 2px solid #ffd700;
+    box-shadow: 0 4px 16px rgba(255,215,0,0.3), 0 2px 8px rgba(0,0,0,0.5);
+    font-size: 18px;
+  }
+  .seat-cards.showdown .seat-card img { border-radius: 5px; }
+
   /* Seat-level action badge — persists for the street */
   .seat-action {
     position: absolute;
@@ -3540,6 +3561,10 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       const knownCards = isHero ? playback.heroCards : (playback.knownVillainCards[i] || []);
       const isShowdown = playback.currentStreet === "showdown";
       const showCards = isHero || (isShowdown && knownCards.length > 0);
+      const isShowdownReveal = isShowdown && player.status !== "folded" && knownCards.length > 0;
+
+      // Add showdown class for big card reveal
+      cardsEl.className = isShowdownReveal ? "seat-cards showdown" : "seat-cards";
 
       if (player.status !== "folded" && playback.mode !== "idle") {
         if (showCards && knownCards.length > 0) {
@@ -3859,17 +3884,17 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   let chipUpdatesSuppressed = false; // true during rake animation
 
   // Offset from seat center toward the table center for chip placement
-  // Offsets push chips onto the felt, toward the table center
+  // Offsets push chips well onto the felt — must NOT overlap player seat chip
   const CHIP_OFFSETS_9 = [
-    { dx: 0, dy: -75 },    // seat 0 (bottom-center) → up
-    { dx: 50, dy: -55 },   // seat 1 (bottom-left) → up-right
-    { dx: 65, dy: 0 },     // seat 2 (mid-left) → right
-    { dx: 50, dy: 55 },    // seat 3 (top-left) → down-right
-    { dx: 20, dy: 65 },    // seat 4 (top-left-center) → down
-    { dx: -20, dy: 65 },   // seat 5 (top-center) → down
-    { dx: -50, dy: 55 },   // seat 6 (top-right-center) → down-left
-    { dx: -65, dy: 0 },    // seat 7 (top-right) → left
-    { dx: -50, dy: -55 }   // seat 8 (mid-right) → up-left
+    { dx: 0, dy: -85 },    // seat 0 (bottom-center) → up
+    { dx: 60, dy: -65 },   // seat 1 (bottom-left) → up-right
+    { dx: 80, dy: 0 },     // seat 2 (mid-left) → right
+    { dx: 60, dy: 65 },    // seat 3 (top-left) → down-right
+    { dx: 25, dy: 80 },    // seat 4 (top-left-center) → down
+    { dx: -25, dy: 80 },   // seat 5 (top-center) → down
+    { dx: -60, dy: 65 },   // seat 6 (top-right-center) → down-left
+    { dx: -80, dy: 0 },    // seat 7 (top-right) → left
+    { dx: -60, dy: -65 }   // seat 8 (mid-right) → up-left
   ];
 
   function placeBetChipAtSeat(seat, amount) {
