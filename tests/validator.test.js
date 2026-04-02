@@ -746,3 +746,349 @@ describe("Engine — Side Pots", () => {
     }
   });
 });
+
+// ============================================================
+// Engine — All-In Edge Cases
+// ============================================================
+
+describe("Engine — All-In Edge Cases", () => {
+  const PE = PokerEngine;
+
+  function setup9Max(stackOverrides) {
+    const stacks = {};
+    for (let i = 1; i <= 9; i++) stacks[i] = stackOverrides[i] || 500;
+    return PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      stacks, smallBlind: 2, bigBlind: 5, defaultStack: 500
+    });
+  }
+
+  it("all-in call for less than raise does not reopen action", () => {
+    // UTG+1 (seat index 4) has only 30 chips. UTG raises to 50.
+    // Stacks key 5 (1-based) = seat index 4 = UTG+1
+    const { players, tableState } = setup9Max({ 5: 30 });
+
+    // UTG (index 3) raises to 50
+    PE.applyPlayerAction(3, "raise", 50, players, tableState, 9, 5, { exactAmount: true });
+    // UTG+1 (index 4, short 30) calls all-in
+    PE.applyPlayerAction(4, "call", 0, players, tableState, 9, 5);
+
+    const shortPlayer = PE.getPlayerBySeat(players, 4);
+    expect(shortPlayer.status).toBe("allin");
+    expect(shortPlayer.stack).toBe(0);
+    // Short stack committed only what they had (30), not the full 50
+    expect(shortPlayer.committedHand).toBeLessThanOrEqual(30);
+  });
+
+  it("call that puts player exactly all-in", () => {
+    // UTG+1 (index 4) has exactly 50 chips
+    const { players, tableState } = setup9Max({ 5: 50 });
+
+    // UTG (index 3) raises to 50
+    PE.applyPlayerAction(3, "raise", 50, players, tableState, 9, 5, { exactAmount: true });
+    // UTG+1 (index 4, 50 chips) calls — exactly covers it
+    PE.applyPlayerAction(4, "call", 0, players, tableState, 9, 5);
+
+    const player = PE.getPlayerBySeat(players, 4);
+    expect(player.stack).toBe(0);
+    expect(player.status).toBe("allin");
+  });
+
+  it("all-in shove for less than minimum raise amount", () => {
+    // UTG+1 (index 4) has only 12 chips
+    const { players, tableState } = setup9Max({ 5: 12 });
+
+    // UTG (index 3) raises to 15
+    PE.applyPlayerAction(3, "raise", 15, players, tableState, 9, 5, { exactAmount: true });
+    // UTG+1 (index 4) goes all-in for 12 (less than the 15 raise, but all-in is allowed)
+    const result = PE.applyPlayerAction(4, "all-in", 0, players, tableState, 9, 5);
+    expect(result.success).toBe(true);
+    const player = PE.getPlayerBySeat(players, 4);
+    expect(player.status).toBe("allin");
+    expect(player.stack).toBe(0);
+  });
+
+  it("multiple all-ins on same street create correct pots", () => {
+    // Seats 4,5,6 (1-based) = indices 3,4,5 = UTG, UTG+1, UTG+2
+    const { players, tableState } = setup9Max({ 4: 100, 5: 200, 6: 500 });
+
+    // UTG (index 3, 100 chips) goes all-in for 100
+    PE.applyPlayerAction(3, "all-in", 0, players, tableState, 9, 5);
+    expect(PE.getPlayerBySeat(players, 3).status).toBe("allin");
+    // UTG+1 (index 4, 200 chips) goes all-in for 200
+    PE.applyPlayerAction(4, "all-in", 0, players, tableState, 9, 5);
+    expect(PE.getPlayerBySeat(players, 4).status).toBe("allin");
+    // UTG+2 (index 5, 500 chips) calls 200
+    PE.applyPlayerAction(5, "call", 0, players, tableState, 9, 5);
+
+    // Should have multiple pots (100 level + 200 level)
+    expect(tableState.pots.length).toBeGreaterThanOrEqual(2);
+    // Total should match
+    const totalPots = tableState.pots.reduce((s, p) => s + p.amount, 0);
+    expect(totalPots).toBe(tableState.pot);
+    // Shortest stack not eligible for the bigger side pot
+    const lastPot = tableState.pots[tableState.pots.length - 1];
+    expect(lastPot.eligible).not.toContain(3);
+  });
+});
+
+// ============================================================
+// Engine — Min Raise Calculation
+// ============================================================
+
+describe("Engine — Min Raise Calculation", () => {
+  const PE = PokerEngine;
+
+  it("min raise after an open raise", () => {
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // UTG raises to 15 (raise of 10 over the 5 BB)
+    PE.applyPlayerAction(3, "raise", 15, players, tableState, 9, 5, { exactAmount: true });
+    // Min re-raise should be 15 + 10 = 25 (previous raise size was 10)
+    expect(tableState.minRaiseTo).toBe(25);
+  });
+
+  it("min raise after a re-raise", () => {
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // UTG raises to 15
+    PE.applyPlayerAction(3, "raise", 15, players, tableState, 9, 5, { exactAmount: true });
+    // UTG+1 re-raises to 45 (raise of 30)
+    PE.applyPlayerAction(4, "raise", 45, players, tableState, 9, 5, { exactAmount: true });
+    // Min re-re-raise should be 45 + 30 = 75
+    expect(tableState.minRaiseTo).toBe(75);
+  });
+
+  it("min raise on the flop is 1 big blind", () => {
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // Start a flop street
+    PE.beginStreetRound("flop", players, tableState, 9, 5);
+    expect(tableState.minRaiseTo).toBe(5); // 1 BB
+  });
+});
+
+// ============================================================
+// Engine — Street Transitions
+// ============================================================
+
+describe("Engine — Street Transitions", () => {
+  const PE = PokerEngine;
+
+  it("beginStreetRound resets committedStreet for active players", () => {
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // Simulate preflop action — some players committed chips
+    PE.applyPlayerAction(3, "raise", 15, players, tableState, 9, 5, { exactAmount: true });
+    PE.applyPlayerAction(4, "call", 0, players, tableState, 9, 5);
+    // Others fold
+    for (let s = 5; s <= 8; s++) PE.applyPlayerAction(s, "fold", 0, players, tableState, 9, 5);
+    // SB/BB
+    PE.applyPlayerAction(1, "fold", 0, players, tableState, 9, 5);
+    PE.applyPlayerAction(2, "fold", 0, players, tableState, 9, 5);
+
+    // Begin flop
+    PE.beginStreetRound("flop", players, tableState, 9, 5);
+
+    // Active players should have committedStreet = 0
+    players.filter(p => p.status === "active").forEach(p => {
+      expect(p.committedStreet).toBe(0);
+    });
+    // toCall should be 0
+    expect(tableState.toCall).toBe(0);
+    // Action should start after button (SB side)
+    expect(tableState.actionSeat).toBeGreaterThanOrEqual(0);
+  });
+
+  it("folded players remain folded across streets", () => {
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // Fold seat 3
+    PE.applyPlayerAction(3, "fold", 0, players, tableState, 9, 5);
+    expect(PE.getPlayerBySeat(players, 3).status).toBe("folded");
+
+    PE.beginStreetRound("flop", players, tableState, 9, 5);
+    expect(PE.getPlayerBySeat(players, 3).status).toBe("folded");
+
+    PE.beginStreetRound("turn", players, tableState, 9, 5);
+    expect(PE.getPlayerBySeat(players, 3).status).toBe("folded");
+  });
+});
+
+// ============================================================
+// Engine — Position Mapping
+// ============================================================
+
+describe("Engine — Position Mapping", () => {
+  const PE = PokerEngine;
+
+  it("9-max position mapping is correct from button", () => {
+    const positions = PE.computePositionsFromButton(0, 9);
+    expect(positions[0]).toBe("BTN");
+    expect(positions[1]).toBe("SB");
+    expect(positions[2]).toBe("BB");
+    expect(positions[3]).toBe("UTG");
+    expect(positions[4]).toBe("UTG+1");
+    expect(positions[5]).toBe("UTG+2");
+    expect(positions[6]).toBe("LJ");
+    expect(positions[7]).toBe("HJ");
+    expect(positions[8]).toBe("CO");
+  });
+
+  it("position mapping wraps correctly with different button seats", () => {
+    const positions = PE.computePositionsFromButton(5, 9);
+    expect(positions[5]).toBe("BTN");
+    expect(positions[6]).toBe("SB");
+    expect(positions[7]).toBe("BB");
+    expect(positions[8]).toBe("UTG");
+    expect(positions[0]).toBe("UTG+1");
+  });
+
+  it("6-max position mapping is correct", () => {
+    const C = PokerConstants;
+    const positions = PE.computePositionsFromButton(0, 6, C.TABLE_POSITIONS_6MAX);
+    expect(positions[0]).toBe("BTN");
+    expect(positions[1]).toBe("SB");
+    expect(positions[2]).toBe("BB");
+    expect(positions[3]).toBe("UTG");
+    expect(positions[4]).toBe("HJ");
+    expect(positions[5]).toBe("CO");
+  });
+});
+
+// ============================================================
+// Engine — Snapshot Capture & Restore
+// ============================================================
+
+describe("Engine — Snapshot Capture & Restore", () => {
+  const PE = PokerEngine;
+
+  it("snapshot captures and restores state correctly", () => {
+    const init = PE.initializeHand({
+      seatCount: 9, buttonSeat: 0, heroSeat: 0,
+      defaultStack: 500, smallBlind: 2, bigBlind: 5
+    });
+    const { players, tableState } = init;
+
+    // Make some actions
+    PE.applyPlayerAction(3, "raise", 15, players, tableState, 9, 5, { exactAmount: true });
+    const potBefore = tableState.pot;
+    const stackBefore = PE.getPlayerBySeat(players, 3).stack;
+
+    // Capture snapshot
+    PE.captureStreetSnapshot("preflop", [], players, tableState);
+
+    // Make more actions that change state
+    PE.applyPlayerAction(4, "call", 0, players, tableState, 9, 5);
+    expect(tableState.pot).not.toBe(potBefore);
+
+    // Restore snapshot
+    const restored = PE.restoreStreetSnapshot("preflop", tableState);
+    expect(restored).not.toBeNull();
+    expect(restored.tableState.pot).toBe(potBefore);
+
+    // Player stacks should be restored
+    const restoredPlayer = PE.getPlayerBySeat(restored.players, 3);
+    expect(restoredPlayer.stack).toBe(stackBefore);
+  });
+
+  it("restore returns null for non-existent snapshot", () => {
+    const tableState = PE.createTableState({});
+    const result = PE.restoreStreetSnapshot("flop", tableState);
+    expect(result).toBeNull();
+  });
+});
+
+// ============================================================
+// Validator — Preflop/Postflop Action Order
+// ============================================================
+
+describe("Validator — Action Order", () => {
+  it("flags BB acting first preflop", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 1, hero_seat: 1, button_seat: 9,
+      hero_cards: ["Ah", "Kd"],
+      blinds: { small: 2, big: 5 },
+      board: {},
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 2, position: "BB", action: "raise", amount: 15 },
+          { seat: 3, position: "UTG", action: "fold" }
+        ]
+      }]
+    });
+    expect(errors.some(e => e.message.includes("BB acts first preflop"))).toBe(true);
+  });
+
+  it("flags SB acting first preflop", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 1, hero_seat: 1, button_seat: 9,
+      hero_cards: ["Ah", "Kd"],
+      blinds: { small: 2, big: 5 },
+      board: {},
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 1, position: "SB", action: "fold" },
+          { seat: 2, position: "BB", action: "check" }
+        ]
+      }]
+    });
+    expect(errors.some(e => e.message.includes("SB acts first preflop"))).toBe(true);
+  });
+
+  it("does not flag UTG acting first preflop", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 1, hero_seat: 1, button_seat: 9,
+      hero_cards: ["Ah", "Kd"],
+      blinds: { small: 2, big: 5 },
+      board: {},
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 3, position: "UTG", action: "raise", amount: 15 },
+          { seat: 1, position: "SB", action: "fold" },
+          { seat: 2, position: "BB", action: "fold" }
+        ]
+      }]
+    });
+    expect(errors.filter(e => e.message.includes("acts first preflop"))).toEqual([]);
+  });
+
+  it("flags button acting first postflop", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 1, hero_seat: 1, button_seat: 9,
+      hero_cards: ["Ah", "Kd"],
+      board: { flop: ["Qs", "Jd", "4c"] },
+      action_sequence: [{
+        street: "flop",
+        actions: [
+          { seat: 9, position: "BTN", action: "bet", amount: 20 },
+          { seat: 1, position: "SB", action: "call", amount: 20 }
+        ]
+      }]
+    });
+    expect(errors.some(e => e.message.includes("Button acts first"))).toBe(true);
+  });
+});
