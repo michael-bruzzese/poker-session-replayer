@@ -370,6 +370,71 @@
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
   }
 
+  /* Street announcement banner */
+  .street-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.6);
+    z-index: 25;
+    font-size: 48px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    color: #fff;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.7);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+  }
+  .street-banner.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .street-banner.fade-out {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.1);
+    transition: opacity 0.5s ease-in, transform 0.5s ease-in;
+  }
+
+  /* Seat pre-action highlight pulse */
+  .seat.pre-highlight .seat-chip {
+    border-color: #fff !important;
+    box-shadow: 0 0 20px rgba(255,255,255,0.5), 0 0 40px rgba(255,215,0,0.3) !important;
+    transition: border-color 0.1s, box-shadow 0.1s;
+  }
+
+  /* Action bar mode switching */
+  .action-buttons.hidden-in-script {
+    display: none;
+  }
+  .acting-prompt.script-mode .acting-label { display: none; }
+  .acting-prompt.script-mode .acting-name { font-size: 14px; color: var(--text-muted); }
+
+  /* Script mode: larger, centered nav */
+  .nav-buttons.script-centered {
+    margin-left: auto;
+    margin-right: auto;
+    gap: 12px;
+  }
+  .nav-buttons.script-centered .nav-btn.primary {
+    padding: 14px 32px;
+    font-size: 16px;
+  }
+
+  /* Branch mode entry button */
+  .branch-entry-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px dashed #666;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .branch-entry-btn:hover { border-color: #fa5; color: #fa5; }
+
   /* Bet chip animation (flies from seat toward pot) */
   .bet-chip-anim {
     position: absolute;
@@ -785,6 +850,8 @@
             </div>
           </div>
           <div id="boardCards" class="board-cards"></div>
+          <!-- Street announcement -->
+          <div id="streetBanner" class="street-banner"></div>
           <!-- Action pop-up overlay -->
           <div id="actionPopup" class="action-popup">
             <div id="actionPopupPlayer" class="action-popup-player"></div>
@@ -840,7 +907,9 @@
           <button id="btnAllIn" class="action-btn allin" disabled>All In</button>
         </div>
 
-        <div class="nav-buttons">
+        <button id="btnGoOffScript" class="branch-entry-btn" style="display:none">Go Off-Script</button>
+
+        <div id="navButtons" class="nav-buttons">
           <button id="btnPrevStep" class="nav-btn" disabled>&lt;&lt; Prev</button>
           <button id="btnNextStep" class="nav-btn primary" disabled>Next &gt;&gt;</button>
           <button id="btnBackToScript" class="nav-btn warning" style="display:none">Back to Script</button>
@@ -2292,6 +2361,7 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     potAmount: document.getElementById("potAmount"),
     potChips: document.getElementById("potChips"),
     boardCards: document.getElementById("boardCards"),
+    streetBanner: document.getElementById("streetBanner"),
     actionPopup: document.getElementById("actionPopup"),
     actionPopupPlayer: document.getElementById("actionPopupPlayer"),
     actionPopupAction: document.getElementById("actionPopupAction"),
@@ -2315,6 +2385,8 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     btnRaise: document.getElementById("btnRaise"),
     btnAllIn: document.getElementById("btnAllIn"),
     sizeInput: document.getElementById("sizeInput"),
+    btnGoOffScript: document.getElementById("btnGoOffScript"),
+    navButtons: document.getElementById("navButtons"),
     btnPrevStep: document.getElementById("btnPrevStep"),
     btnNextStep: document.getElementById("btnNextStep"),
     btnBackToScript: document.getElementById("btnBackToScript"),
@@ -2478,26 +2550,26 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     els.modeBadge.className = `mode-badge ${playback.mode}`;
     els.modeBadge.textContent = playback.mode === "idle" ? "Idle" : playback.mode === "script" ? "Script" : "Branch";
 
-    // Acting prompt
-    if (playback.tableState && playback.tableState.actionSeat >= 0) {
-      const player = PE.getPlayerBySeat(playback.players, playback.tableState.actionSeat);
-      if (player) {
-        els.actingName.textContent = player.name;
-        els.actingPosition.textContent = player.position;
-        els.actingStack.textContent = `Stack: ${player.stack}`;
-      }
-    } else {
-      els.actingName.textContent = "--";
-      els.actingPosition.textContent = "";
-      els.actingStack.textContent = "";
-    }
+    // Acting prompt handled by updateActionButtons()
   }
 
   // ---- Action Buttons ----
 
   function updateActionButtons() {
     const inBranch = playback.mode === "branch";
+    const inScript = playback.mode === "script";
     const hasSeat = playback.tableState && playback.tableState.actionSeat >= 0;
+    const hasSession = session.hands.length > 0;
+
+    // Toggle action buttons visibility: hidden in script, visible in branch
+    els.actionButtons.classList.toggle("hidden-in-script", !inBranch);
+    els.actingPrompt.classList.toggle("script-mode", !inBranch);
+
+    // "Go Off-Script" button: show in script mode, hide in branch
+    els.btnGoOffScript.style.display = inScript ? "" : "none";
+
+    // Nav buttons layout
+    els.navButtons.classList.toggle("script-centered", !inBranch);
 
     if (inBranch && hasSeat) {
       const legal = PE.getLegalActions(playback.tableState.actionSeat, playback.players, playback.tableState);
@@ -2509,24 +2581,38 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
       els.btnRaise.disabled = !legal.raise;
       els.btnAllIn.disabled = !legal.allIn;
       els.sizeInput.value = legal.minRaiseTo || session.blinds.big;
-    } else {
-      els.btnFold.disabled = true;
-      els.btnCheck.disabled = true;
-      els.btnCall.disabled = true;
-      els.btnCall.textContent = "Call";
-      els.btnBet.disabled = true;
-      els.btnRaise.disabled = true;
-      els.btnAllIn.disabled = true;
     }
 
     // Nav buttons
-    const hasSession = session.hands.length > 0;
-    const inScript = playback.mode === "script";
     els.btnNextStep.disabled = !(inScript && playback.currentStepIndex < playback.totalSteps - 1);
     els.btnPrevStep.disabled = !(inScript && playback.currentStepIndex >= 0);
     els.btnNextHand.disabled = !(hasSession && playback.currentHandIndex < session.hands.length - 1);
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
     els.btnBackToScript.style.display = inBranch ? "" : "none";
+
+    // Script mode acting prompt: show upcoming action hint
+    if (inScript && !inBranch) {
+      const nextIdx = playback.currentStepIndex + 1;
+      if (nextIdx < playback.flatActions.length) {
+        const nextAction = playback.flatActions[nextIdx];
+        const seat = (nextAction.seat || 1) - 1;
+        const player = PE.getPlayerBySeat(playback.players, seat);
+        els.actingName.textContent = player ? player.name : `Seat ${seat + 1}`;
+        els.actingPosition.textContent = nextAction.position || "";
+        els.actingStack.textContent = "";
+      } else {
+        els.actingName.textContent = playback.currentStreet === "showdown" ? "Hand Complete" : "End of Hand";
+        els.actingPosition.textContent = "";
+        els.actingStack.textContent = "";
+      }
+    } else if (inBranch && hasSeat) {
+      const player = PE.getPlayerBySeat(playback.players, playback.tableState.actionSeat);
+      if (player) {
+        els.actingName.textContent = player.name;
+        els.actingPosition.textContent = player.position;
+        els.actingStack.textContent = `Stack: ${player.stack}`;
+      }
+    }
   }
 
   // ---- Full Render ----
@@ -2842,31 +2928,58 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
 
   // ---- Script Playback ----
 
+  let stepAnimating = false;
+
   function nextStep() {
     if (playback.mode !== "script") return;
+    if (stepAnimating) return;
+
     if (playback.currentStepIndex >= playback.totalSteps - 1) {
-      // Hand is done
       playback.currentStreet = "showdown";
       playback.tableState.actionSeat = -1;
+      showStreetBanner("SHOWDOWN");
       render();
       return;
     }
 
     const nextIdx = playback.currentStepIndex + 1;
     const step = playback.flatActions[nextIdx];
-
-    // Check if we're entering a new street
     const newStreet = step.street;
-    if (newStreet !== playback.currentStreet && newStreet !== "preflop") {
-      transitionToStreet(newStreet);
-    }
+    const needsStreetTransition = newStreet !== playback.currentStreet && newStreet !== "preflop";
 
-    // Apply the action
-    const seatIdx = (step.seat || 1) - 1; // convert 1-based to 0-based
+    stepAnimating = true;
+
+    if (needsStreetTransition) {
+      // Street transition: show banner → deal cards → then apply action
+      transitionToStreet(newStreet);
+      renderBoard();
+      renderStatus();
+      showStreetBanner(newStreet.toUpperCase());
+
+      setTimeout(() => {
+        applyStepAction(step, nextIdx);
+        stepAnimating = false;
+      }, 700);
+    } else {
+      // Normal action: highlight seat → brief pause → apply
+      const seatIdx = (step.seat || 1) - 1;
+      playback.tableState.actionSeat = seatIdx;
+      els.seatElements[seatIdx].classList.add("pre-highlight");
+      renderSeats();
+
+      setTimeout(() => {
+        els.seatElements[seatIdx].classList.remove("pre-highlight");
+        applyStepAction(step, nextIdx);
+        stepAnimating = false;
+      }, 250);
+    }
+  }
+
+  function applyStepAction(step, nextIdx) {
+    const seatIdx = (step.seat || 1) - 1;
     const action = PE.normalizeActionName(step.action);
     const amount = step.amount || 0;
 
-    // Make sure this seat is the acting seat
     playback.tableState.actionSeat = seatIdx;
 
     const result = PE.applyPlayerAction(
@@ -2881,6 +2994,24 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
 
     playback.currentStepIndex = nextIdx;
     render();
+  }
+
+  // ---- Street Banner ----
+
+  let streetBannerTimer = 0;
+
+  function showStreetBanner(text) {
+    if (streetBannerTimer) clearTimeout(streetBannerTimer);
+    els.streetBanner.textContent = text;
+    els.streetBanner.className = "street-banner visible";
+
+    streetBannerTimer = setTimeout(() => {
+      els.streetBanner.classList.remove("visible");
+      els.streetBanner.classList.add("fade-out");
+      streetBannerTimer = setTimeout(() => {
+        els.streetBanner.className = "street-banner";
+      }, 600);
+    }, 800);
   }
 
   function prevStep() {
@@ -3654,6 +3785,7 @@ if (typeof window !== "undefined") window.HoldemValidator = HoldemValidator;
     els.btnBet.addEventListener("click", () => applyBranchAction("bet", Number(els.sizeInput.value)));
     els.btnRaise.addEventListener("click", () => applyBranchAction("raise", Number(els.sizeInput.value)));
     els.btnAllIn.addEventListener("click", () => applyBranchAction("all-in"));
+    els.btnGoOffScript.addEventListener("click", () => enterBranchMode());
 
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
