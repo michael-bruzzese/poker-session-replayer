@@ -73,7 +73,20 @@ const ShorthandLearner = (() => {
       "move in": "all-in", "moves in": "all-in", "moved in": "all-in",
       "puts it in": "all-in", "put it in": "all-in",
       "goes all in": "all-in", "went all in": "all-in",
-      "gets it in": "all-in", "got it in": "all-in"
+      "gets it in": "all-in", "got it in": "all-in",
+      // Raise first in / specific plays
+      "rfi": "raise", "raise first in": "raise",
+      "cc": "call", "cold-call": "call", "cold-calls": "call",
+      // Snap / tank prefixes
+      "snap call": "call", "snap-call": "call", "snap calls": "call",
+      "snap fold": "fold", "snap-fold": "fold", "snap folds": "fold",
+      "snap shove": "all-in", "snap-shove": "all-in", "snap jams": "all-in",
+      "tanks and calls": "call", "tank calls": "call", "tank-calls": "call",
+      "tanks and folds": "fold", "tank folds": "fold", "tank-folds": "fold",
+      "tanks and shoves": "all-in",
+      "hero call": "call", "hero-call": "call", "hero calls": "call",
+      "look up": "call", "looks up": "call", "looked up": "call",
+      "bluff catch": "call", "bluff catches": "call", "bluff-catch": "call"
     },
     // Compound actions: expand into 2 actions
     compoundActions: {
@@ -238,7 +251,16 @@ const ShorthandLearner = (() => {
       "turn": "turn", "tn": "turn", "tr": "turn", "the turn": "turn",
       "turn is": "turn", "turn was": "turn", "turn comes": "turn",
       "river": "river", "rv": "river", "ri": "river", "the river": "river",
-      "river is": "river", "river was": "river", "river comes": "river"
+      "river is": "river", "river was": "river", "river comes": "river",
+      // Abbreviated street markers (forum style)
+      "otf": "flop", "on the flop": "flop",
+      "ott": "turn", "on the turn": "turn",
+      "otr": "river", "on the river": "river",
+      // PokerStars format markers
+      "*** hole cards ***": "preflop", "*** flop ***": "flop",
+      "*** turn ***": "turn", "*** river ***": "river",
+      "*** summary ***": "showdown", "*** show down ***": "showdown",
+      "hole cards": "preflop"
     },
     // Learned player nicknames: { "the fish": 3, "old guy": 7 }
     playerNicknames: {},
@@ -720,8 +742,23 @@ const ShorthandLearner = (() => {
     const handNames = { ...DEFAULT_PATTERNS.handNames, ...(profile.handNames || {}) };
     const lower = text.toLowerCase();
 
-    // Check for hand name shortcuts first ("pocket aces", "big slick", "AK suited")
-    for (const [name, rankPair] of Object.entries(handNames)) {
+    // Check for "AKs" / "AKo" / "JTs" style notation (rank+rank+suited/offsuit)
+    const rankedHandRegex = /\b([AKQJT2-9])([AKQJT2-9])([so])\b/gi;
+    let rankedMatch;
+    while ((rankedMatch = rankedHandRegex.exec(text)) !== null) {
+      const r1 = rankedMatch[1].toUpperCase();
+      const r2 = rankedMatch[2].toUpperCase();
+      const isSuited = rankedMatch[3].toLowerCase() === "s";
+      if (isSuited) {
+        result.hero = [r1 + "s", r2 + "s"];
+      } else {
+        result.hero = [r1 + "h", r2 + "d"];
+      }
+      break;
+    }
+
+    // Check for hand name shortcuts ("pocket aces", "big slick", "AK suited")
+    if (!result.hero.length) for (const [name, rankPair] of Object.entries(handNames)) {
       // Match whole words only (avoid "button" matching "tt", "the" matching "th")
       const nameRegex = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
       if (nameRegex.test(lower)) {
@@ -745,6 +782,42 @@ const ShorthandLearner = (() => {
     const codedCards = [];
     while ((m = codeRegex.exec(text)) !== null) {
       codedCards.push(m[1].toUpperCase() + m[2].toLowerCase());
+    }
+
+    // "10" as rank: 10h, 10s, 10d, 10c
+    const tenRegex = /\b10([shdc])\b/gi;
+    while ((m = tenRegex.exec(text)) !== null) {
+      codedCards.push("T" + m[1].toLowerCase());
+    }
+
+    // Unicode suit symbols: A♥, K♠, Q♦, J♣ (and outline variants ♡♤♢♧)
+    const unicodeRegex = /([AKQJT2-9])([♥♡♦♢♣♧♠♤])/g;
+    const unicodeSuitMap = { "♥": "h", "♡": "h", "♦": "d", "♢": "d", "♣": "c", "♧": "c", "♠": "s", "♤": "s" };
+    while ((m = unicodeRegex.exec(text)) !== null) {
+      const suit = unicodeSuitMap[m[2]];
+      if (suit) codedCards.push(m[1].toUpperCase() + suit);
+    }
+
+    // Bracket notation from PokerStars: [Ah Kd] or [Ah Kd 7c]
+    const bracketRegex = /\[([AKQJT2-9][shdc](?:\s+[AKQJT2-9][shdc])*)\]/gi;
+    while ((m = bracketRegex.exec(text)) !== null) {
+      const bracketCards = m[1].match(/[AKQJT2-9][shdc]/gi) || [];
+      bracketCards.forEach(c => codedCards.push(c[0].toUpperCase() + c[1].toLowerCase()));
+    }
+
+    // No-separator concatenated cards: AhKd7c (groups of 2: rank+suit)
+    const concatRegex = /(?:^|[^a-zA-Z])([AKQJT2-9][shdc])([AKQJT2-9][shdc])([AKQJT2-9][shdc])?([AKQJT2-9][shdc])?([AKQJT2-9][shdc])?(?:[^a-zA-Z]|$)/gi;
+    while ((m = concatRegex.exec(text)) !== null) {
+      for (let ci = 1; ci <= 5; ci++) {
+        if (m[ci]) codedCards.push(m[ci][0].toUpperCase() + m[ci][1].toLowerCase());
+      }
+    }
+
+    // PokerStars "Dealt to Hero [Ah Kd]" pattern
+    const dealtRegex = /dealt\s+to\s+\w+\s+\[([^\]]+)\]/gi;
+    while ((m = dealtRegex.exec(text)) !== null) {
+      const dealtCards = m[1].match(/[AKQJT2-9][shdc]/gi) || [];
+      dealtCards.forEach(c => codedCards.push(c[0].toUpperCase() + c[1].toLowerCase()));
     }
 
     // Natural language cards: "ace of spades", "king hearts", "ten of diamonds"
@@ -914,7 +987,7 @@ const ShorthandLearner = (() => {
           lineLower.startsWith(marker + " ") ||
           lineLower === marker ||
           lineLower.startsWith("the " + marker) ||
-          lineLower.match(new RegExp("^" + marker + "\\b"))) {
+          lineLower.match(new RegExp("^" + marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b"))) {
         return street;
       }
     }
@@ -957,25 +1030,44 @@ const ShorthandLearner = (() => {
 
   function extractAmountFromTokens(tokens, actionIdx, bb) {
     // Look forward from the action word for a number
-    for (let j = actionIdx + 1; j < Math.min(tokens.length, actionIdx + 5); j++) {
+    for (let j = actionIdx + 1; j < Math.min(tokens.length, actionIdx + 6); j++) {
       const word = tokens[j].toLowerCase();
 
       // Skip filler words
-      if (["to", "for", "it", "of", "the", "a", "makes", "puts", "in"].includes(word)) continue;
+      if (["to", "for", "it", "of", "the", "a", "about", "around", "like",
+           "makes", "puts", "in", "up", "roughly", "approximately"].includes(word)) continue;
 
-      // Dollar sign prefix
+      // Dollar sign prefix: $25, $100
       if (word.startsWith("$")) {
         const num = parseInt(word.substring(1));
         if (num > 0) return num;
       }
 
+      // "Xbb" / "X bb" format: 3bb, 100bb
+      const bbMatch = word.match(/^(\d+\.?\d*)bb$/i);
+      if (bbMatch) return Math.round(parseFloat(bbMatch[1]) * bb);
+
+      // "Xx" multiplier format: 3x, 4x (preflop = multiply BB)
+      const xMatch = word.match(/^(\d+\.?\d*)x$/i);
+      if (xMatch) return Math.round(parseFloat(xMatch[1]) * bb);
+
+      // Percentage of pot: "50%", "33%", "75%"
+      const pctMatch = word.match(/^(\d+)%$/);
+      if (pctMatch) {
+        // Can't calculate without pot size, return as-is (approximate)
+        return parseInt(pctMatch[1]);
+      }
+
+      // Fraction notation: "1/3", "2/3", "3/4"
+      const fracMatch = word.match(/^(\d+)\/(\d+)$/);
+      if (fracMatch && parseInt(fracMatch[2]) > 0) {
+        // Approximate — without pot context just return a marker
+        return Math.round((parseInt(fracMatch[1]) / parseInt(fracMatch[2])) * 100);
+      }
+
       // Plain number
       const num = parseInt(word);
       if (num > 0) return num;
-
-      // "Xbb" format
-      const bbMatch = word.match(/^(\d+)bb$/i);
-      if (bbMatch) return parseInt(bbMatch[1]) * bb;
 
       // If we hit another action word, stop looking
       if (DEFAULT_PATTERNS.actions[word]) break;

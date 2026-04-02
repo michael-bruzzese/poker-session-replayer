@@ -296,3 +296,99 @@ describe("Profile Management", () => {
     expect(list).not.toContain("to_delete");
   });
 });
+
+// ============================================================
+// Extended Card Format Tests
+// ============================================================
+
+describe("Extended Card Formats", () => {
+  it("extracts unicode suit symbols", () => {
+    const result = SL.extractCardsFlexible("Hero has A♥ K♠", {});
+    expect(result.all).toContain("Ah");
+    expect(result.all).toContain("Ks");
+  });
+
+  it("extracts bracket notation [Ah Kd]", () => {
+    const result = SL.extractCardsFlexible("Dealt to Hero [Ah Kd]", {});
+    expect(result.all).toContain("Ah");
+    expect(result.all).toContain("Kd");
+  });
+
+  it("extracts 10 as T", () => {
+    const result = SL.extractCardsFlexible("Hero has 10h 10s", {});
+    expect(result.all).toContain("Th");
+    expect(result.all).toContain("Ts");
+  });
+
+  it("extracts PokerStars 'Dealt to' format", () => {
+    const result = SL.extractCardsFlexible("*** HOLE CARDS ***\nDealt to Hero [Qd Js]", {});
+    expect(result.all).toContain("Qd");
+    expect(result.all).toContain("Js");
+  });
+
+  it("handles AKs / AKo hand notation with suited/offsuit", () => {
+    const result = SL.extractCardsFlexible("I had AKs on the button", {});
+    expect(result.hero.length).toBe(2);
+    expect(result.hero[0][0]).toBe("A");
+    expect(result.hero[1][0]).toBe("K");
+    // Suited — same suit
+    expect(result.hero[0][1]).toBe(result.hero[1][1]);
+  });
+
+  it("handles pocket pair notation", () => {
+    const result = SL.extractCardsFlexible("I have 99 in the cutoff", {});
+    expect(result.hero.length).toBe(2);
+    expect(result.hero[0][0]).toBe("9");
+    expect(result.hero[1][0]).toBe("9");
+  });
+});
+
+// ============================================================
+// Extended Action Parsing Tests
+// ============================================================
+
+describe("Extended Action Parsing", () => {
+  it("handles snap call", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\nAh Kd\nflop Qs 9h 4c\nvillain bets 30 hero snap calls",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    const hand = result.hands[0];
+    const flop = hand.action_sequence.find(s => s.street === "flop");
+    if (flop) expect(flop.actions.some(a => a.action === "call")).toBe(true);
+  });
+
+  it("handles squeeze", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\nAh Kd\nutg opens hero squeezes to 45",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    const hand = result.hands[0];
+    const pre = hand.action_sequence.find(s => s.street === "preflop");
+    if (pre) expect(pre.actions.some(a => a.action === "raise")).toBe(true);
+  });
+
+  it("parses Xbb amount format", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\nAh Kd\nutg raises 3bb hero calls",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    const hand = result.hands[0];
+    const pre = hand.action_sequence.find(s => s.street === "preflop");
+    if (pre) {
+      const raise = pre.actions.find(a => a.action === "raise");
+      if (raise) expect(raise.amount).toBe(15); // 3 * 5bb
+    }
+  });
+
+  it("handles PokerStars street markers", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\n*** HOLE CARDS ***\nDealt to Hero [Ah Kd]\nutg raises to 15\n*** FLOP *** [Qs 9h 4c]\nhero bets 20",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    const hand = result.hands[0];
+    const streets = hand.action_sequence.map(s => s.street);
+    expect(streets).toContain("preflop");
+    expect(streets).toContain("flop");
+  });
+});
