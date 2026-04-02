@@ -376,6 +376,7 @@
   .seat-action.bet { background: #664400; color: #fda; }
   .seat-action.raise { background: #664400; color: #fda; }
   .seat-action.all-in { background: #663366; color: #faf; }
+  .seat-action.blind { background: #333355; color: #aaf; }
 
   /* Big center-table action pop-up */
   .action-popup {
@@ -1357,7 +1358,11 @@
       const callout = playback.actionCallouts[i];
       if (callout) {
         let text = callout.action;
-        if (callout.amount && callout.action !== "fold" && callout.action !== "check") {
+        if (callout.action === "blind") {
+          // Show as "SB 2" or "BB 5"
+          const pos = player.position || "";
+          text = pos === "SB" ? `SB ${callout.amount}` : pos === "BB" ? `BB ${callout.amount}` : `Blind ${callout.amount}`;
+        } else if (callout.amount && callout.action !== "fold" && callout.action !== "check") {
           text += ` ${callout.amount}`;
         } else if (callout.action === "check") {
           text = "Check";
@@ -1982,6 +1987,14 @@
       });
     }
     playback.currentStreet = "preflop";
+
+    // Show blind posting badges so viewers see SB/BB posted
+    const sbSeat = PE.findSeatByPosition(playback.players, "SB");
+    const bbSeat = PE.findSeatByPosition(playback.players, "BB");
+    const sb = (hand.blinds || session.blinds).small;
+    const bb = (hand.blinds || session.blinds).big;
+    if (sbSeat >= 0) playback.actionCallouts[sbSeat] = { action: "blind", amount: sb };
+    if (bbSeat >= 0) playback.actionCallouts[bbSeat] = { action: "blind", amount: bb };
 
     // Capture preflop snapshot
     PE.captureStreetSnapshot("preflop", [], playback.players, playback.tableState);
