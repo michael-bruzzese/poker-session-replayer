@@ -3273,7 +3273,9 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     const seatEl = els.seatElements[seat];
     if (!seatEl) return;
     const feltRect = els.tableFelt.getBoundingClientRect();
+    if (feltRect.width === 0 || feltRect.height === 0) return; // not visible yet
     const seatRect = seatEl.getBoundingClientRect();
+    if (seatRect.width === 0) return;
 
     const el = document.createElement("div");
     el.className = "seat-bet-chips";
@@ -3312,6 +3314,11 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     }
 
     const feltRect = els.tableFelt.getBoundingClientRect();
+    if (feltRect.width === 0) {
+      clearAllBetChips();
+      if (onComplete) onComplete();
+      return;
+    }
     const potX = feltRect.width / 2;
     const potY = feltRect.height * 0.22;
 
@@ -3428,11 +3435,12 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     renderHandList();
     renderPlayerInfo();
 
-    if (session.hands.length > 0) {
-      loadHand(0);
-    }
-
     showScreen("playback");
+
+    if (session.hands.length > 0) {
+      // Delay slightly so the screen is visible and layout is computed
+      requestAnimationFrame(() => loadHand(0));
+    }
   }
 
   // ---- Hand List ----
