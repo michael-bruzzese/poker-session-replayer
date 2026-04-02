@@ -322,19 +322,19 @@
   }
   .seat-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
 
-  /* Small seat-level action badge */
+  /* Seat-level action badge — persists for the street */
   .seat-action {
     position: absolute;
-    bottom: -22px;
+    bottom: -24px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
-    padding: 3px 10px;
+    padding: 3px 12px;
     border-radius: 10px;
     white-space: nowrap;
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.2s;
   }
   .seat-action.visible { opacity: 1; }
   .seat-action.fold { background: #662222; color: #faa; }
@@ -3557,16 +3557,21 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
         }
       }
 
-      // Action callout
+      // Action callout — persists for the street
       const actionEl = el.querySelector("[data-seat-action]");
       const callout = playback.actionCallouts[i];
       if (callout) {
         let text = callout.action;
         if (callout.amount && callout.action !== "fold" && callout.action !== "check") {
           text += ` ${callout.amount}`;
+        } else if (callout.action === "check") {
+          text = "Check";
         }
         actionEl.textContent = text.charAt(0).toUpperCase() + text.slice(1);
         actionEl.className = `seat-action visible ${callout.action}`;
+      } else if (player.status === "folded") {
+        actionEl.textContent = "Fold";
+        actionEl.className = "seat-action visible fold";
       } else {
         actionEl.className = "seat-action";
       }
@@ -3761,24 +3766,21 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
 
   // ---- Action Callouts ----
 
-  const ACTION_CALLOUT_MS = 2200;
   const calloutTimers = {};
   let popupFadeTimer = 0;
 
   function showActionCallout(seat, action, amount) {
-    // Small seat-level badge
-    if (calloutTimers[seat]) clearTimeout(calloutTimers[seat]);
+    // Seat-level badge — persists for the whole street (not on a timer)
     playback.actionCallouts[seat] = { action, amount };
-    calloutTimers[seat] = setTimeout(() => {
-      delete playback.actionCallouts[seat];
-      render();
-    }, ACTION_CALLOUT_MS);
 
-    // Big center pop-up
+    // Big pop-up near the acting seat
     showBigPopup(seat, action, amount);
 
     // Update committed chips in front of seats
     updateSeatBetChips();
+
+    // Re-render seats to show updated badges
+    renderSeats();
   }
 
   // Position popup halfway between seat and table center
@@ -3837,12 +3839,15 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   }
 
   function clearAllCallouts() {
-    Object.keys(calloutTimers).forEach((k) => clearTimeout(calloutTimers[k]));
-    Object.keys(calloutTimers).forEach((k) => delete calloutTimers[k]);
     playback.actionCallouts = {};
     if (popupFadeTimer) clearTimeout(popupFadeTimer);
     els.actionPopup.className = "action-popup";
     clearAllBetChips();
+  }
+
+  function clearStreetCallouts() {
+    // Clear seat badges at street transitions but keep the pop-up system running
+    playback.actionCallouts = {};
   }
 
   // ---- Chip Animation ----
@@ -4203,6 +4208,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       stepAnimating = true;
       rakeChipsToPot(() => {
         clearAllBetChips();
+        clearStreetCallouts();
         playback.currentStreet = "showdown";
         playback.tableState.actionSeat = -1;
         showStreetBanner("SHOWDOWN");
@@ -4222,11 +4228,13 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     if (needsStreetTransition) {
       // Street transition: rake chips to pot → clear → show banner → deal cards → apply action
       rakeChipsToPot(() => {
-        clearAllBetChips(); // ensure all chip elements are gone before new street
+        clearAllBetChips();
+        clearStreetCallouts(); // clear seat badges for the new street
         transitionToStreet(newStreet);
         renderBoard();
         renderStatus();
         renderDealerButton();
+        renderSeats(); // show clean badges
         showStreetBanner(newStreet.toUpperCase());
 
         setTimeout(() => {
