@@ -272,7 +272,32 @@
 
   .seat-position { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .seat-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
-  .seat-stack { font-size: 16px; font-weight: 800; color: #7bed7b; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  .seat-stack { font-size: 20px; font-weight: 800; color: #7bed7b; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  .seat-chipstack {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    margin-top: 2px;
+    height: 20px;
+    align-items: flex-end;
+  }
+  .seat-chipstack-col {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 0px;
+  }
+  .seat-chipstack-disc {
+    width: 14px;
+    height: 4px;
+    border-radius: 7px / 2px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.25);
+  }
+  .seat-chipstack-disc.red { background: linear-gradient(to bottom, #e55, #b33); }
+  .seat-chipstack-disc.green { background: linear-gradient(to bottom, #5b5, #393); }
+  .seat-chipstack-disc.blue { background: linear-gradient(to bottom, #58f, #35b); }
+  .seat-chipstack-disc.black { background: linear-gradient(to bottom, #666, #333); }
+  .seat-chipstack-disc.white { background: linear-gradient(to bottom, #eee, #bbb); }
   .seat-cards {
     display: flex;
     gap: 3px;
@@ -1143,6 +1168,7 @@
           <div class="seat-position" data-seat-position></div>
           <div class="seat-name" data-seat-name>Seat ${i + 1}</div>
           <div class="seat-stack" data-seat-stack>--</div>
+          <div class="seat-chipstack" data-seat-chipstack></div>
           <div class="seat-cards" data-seat-cards></div>
         </div>
         <div class="seat-action" data-seat-action></div>
@@ -1165,6 +1191,7 @@
       el.querySelector("[data-seat-position]").textContent = player.position || "";
       el.querySelector("[data-seat-name]").textContent = player.name || `Seat ${i + 1}`;
       el.querySelector("[data-seat-stack]").textContent = player.stack;
+      renderSeatChipStack(el.querySelector("[data-seat-chipstack]"), player.stack);
 
       el.classList.toggle("acting", playback.tableState && playback.tableState.actionSeat === i);
       el.classList.toggle("hero", playback.tableState && playback.tableState.heroSeat === i);
@@ -1235,6 +1262,44 @@
     }
     if (!found) {
       el.innerHTML = `<span style="color:${color}">${rank}${symbol}</span>`;
+    }
+  }
+
+  // ---- Seat Chip Stack Graphic ----
+
+  function renderSeatChipStack(container, stackAmount) {
+    container.innerHTML = "";
+    if (!stackAmount || stackAmount <= 0) return;
+
+    const bb = session.blinds.big || 10;
+    const stackBBs = stackAmount / bb;
+
+    // Determine columns and chips per column based on stack size
+    // Bigger stacks = more columns, taller columns
+    const colors = ["red", "green", "blue", "black", "white"];
+    let cols, chipsPerCol;
+
+    if (stackBBs >= 200) {
+      cols = 5; chipsPerCol = 4;
+    } else if (stackBBs >= 100) {
+      cols = 4; chipsPerCol = 3;
+    } else if (stackBBs >= 50) {
+      cols = 3; chipsPerCol = 3;
+    } else if (stackBBs >= 20) {
+      cols = 2; chipsPerCol = 2;
+    } else {
+      cols = 1; chipsPerCol = Math.max(1, Math.min(3, Math.ceil(stackBBs / 5)));
+    }
+
+    for (let c = 0; c < cols; c++) {
+      const col = document.createElement("div");
+      col.className = "seat-chipstack-col";
+      for (let d = 0; d < chipsPerCol; d++) {
+        const disc = document.createElement("div");
+        disc.className = `seat-chipstack-disc ${colors[c % colors.length]}`;
+        col.appendChild(disc);
+      }
+      container.appendChild(col);
     }
   }
 
