@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Replayer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --felt-green: #1a5c2a;
+    --felt-dark: #134420;
+    --seat-bg: #1e1e2e;
+    --seat-border: #444;
+    --seat-active-border: #ffd700;
+    --seat-hero-border: #4a9eff;
+    --btn-primary: #2a7fff;
+    --btn-danger: #d44;
+    --btn-success: #2a8f2a;
+    --text-primary: #eee;
+    --text-secondary: #aaa;
+    --text-muted: #777;
+    --panel-bg: #1a1a2e;
+    --panel-border: #333;
+    --sidebar-width: 280px;
+    --action-bar-height: 180px;
+    --status-bar-height: 48px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0d0d1a;
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- Top Bar ---- */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--panel-border);
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .top-bar h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .top-bar .session-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .top-bar-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .top-bar-controls button {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    background: var(--seat-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .top-bar-controls button:hover { background: #2a2a3e; }
+
+  /* ---- Main Layout ---- */
+  .main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar {
+    width: var(--sidebar-width);
+    background: var(--panel-bg);
+    border-right: 1px solid var(--panel-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar.collapsed { width: 0; overflow: hidden; }
+  .sidebar-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--panel-border);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hand-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .hand-list-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hand-list-item:hover { background: #222233; }
+  .hand-list-item.active { background: #1a3a5c; border-left: 3px solid var(--btn-primary); }
+  .hand-list-item .hand-num { font-weight: 600; min-width: 32px; }
+  .hand-list-item .hand-summary { color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hand-list-item .star-btn {
+    background: none; border: none; cursor: pointer; font-size: 14px; color: var(--text-muted); padding: 0 4px;
+  }
+  .hand-list-item .star-btn.starred { color: #ffd700; }
+
+  .player-info-panel {
+    border-top: 1px solid var(--panel-border);
+    padding: 10px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .player-info-panel h3 { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .player-entry { font-size: 11px; padding: 3px 0; border-bottom: 1px solid #222; }
+  .player-entry .player-name { font-weight: 600; }
+  .player-entry .player-desc { color: var(--text-muted); }
+
+  /* ---- Center Area ---- */
+  .center-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---- Table ---- */
+  .table-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    min-height: 300px;
+  }
+
+  .table-felt {
+    position: relative;
+    width: min(100%, 900px);
+    aspect-ratio: 1.8 / 1;
+    max-height: 100%;
+    background: radial-gradient(ellipse at center, var(--felt-green) 0%, var(--felt-dark) 100%);
+    border-radius: 50%;
+    border: 6px solid #2a1a0a;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(0,0,0,0.3);
+  }
+
+  /* ---- Pot Display ---- */
+  .pot-display {
+    position: absolute;
+    top: 32%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+  }
+  .pot-label { font-size: 11px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px; }
+  .pot-amount { font-size: 22px; font-weight: 700; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+
+  /* ---- Board Cards ---- */
+  .board-cards {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 6px;
+  }
+  .board-card {
+    width: 56px;
+    height: 80px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px solid #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .board-card.empty { background: rgba(255,255,255,0.1); border: 1px dashed rgba(255,255,255,0.2); }
+  .board-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 5px; }
+
+  /* ---- Seats ---- */
+  .seat {
+    position: absolute;
+    width: 110px;
+    text-align: center;
+    transform: translate(-50%, -50%);
+    transition: border-color 0.2s;
+  }
+  .seat-chip {
+    background: var(--seat-bg);
+    border: 2px solid var(--seat-border);
+    border-radius: 10px;
+    padding: 6px 8px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .seat-chip:hover { border-color: #666; }
+  .seat.acting .seat-chip { border-color: var(--seat-active-border); box-shadow: 0 0 12px rgba(255,215,0,0.4); }
+  .seat.hero .seat-chip { border-color: var(--seat-hero-border); }
+  .seat.folded .seat-chip { opacity: 0.4; }
+
+  .seat-position { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .seat-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+  .seat-stack { font-size: 13px; font-weight: 700; color: #7bed7b; }
+  .seat-cards {
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+    margin-top: 2px;
+  }
+  .seat-card {
+    width: 32px;
+    height: 46px;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .seat-card.face-down {
+    background: linear-gradient(135deg, #c85f00 25%, #fff 25%, #fff 50%, #c85f00 50%, #c85f00 75%, #fff 75%);
+    background-size: 8px 8px;
+  }
+  .seat-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
+
+  /* Action callout */
+  .seat-action {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .seat-action.visible { opacity: 1; }
+  .seat-action.fold { background: #662222; color: #faa; }
+  .seat-action.check { background: #336633; color: #afa; }
+  .seat-action.call { background: #336633; color: #afa; }
+  .seat-action.bet { background: #664400; color: #fda; }
+  .seat-action.raise { background: #664400; color: #fda; }
+  .seat-action.all-in { background: #663366; color: #faf; }
+
+  /* 9-seat positions (percentages of felt) */
+  .seat[data-visual="bottom-center"] { left: 50%; top: 97%; }
+  .seat[data-visual="bottom-left"]   { left: 22%; top: 90%; }
+  .seat[data-visual="mid-left"]      { left: 4%;  top: 58%; }
+  .seat[data-visual="top-left"]      { left: 10%; top: 22%; }
+  .seat[data-visual="top-left-center"]  { left: 32%; top: 5%; }
+  .seat[data-visual="top-center"]    { left: 50%; top: 2%; }
+  .seat[data-visual="top-right-center"] { left: 68%; top: 5%; }
+  .seat[data-visual="top-right"]     { left: 90%; top: 22%; }
+  .seat[data-visual="mid-right"]     { left: 96%; top: 58%; }
+
+  /* ---- Status Bar ---- */
+  .status-bar {
+    height: var(--status-bar-height);
+    background: var(--panel-bg);
+    border-top: 1px solid var(--panel-border);
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 24px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .status-item { display: flex; align-items: center; gap: 6px; }
+  .status-label { color: var(--text-muted); }
+  .status-value { font-weight: 600; }
+  .mode-badge {
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .mode-badge.script { background: #1a3a1a; color: #5b5; border: 1px solid #3a5a3a; }
+  .mode-badge.branch { background: #5a3a1a; color: #fa5; border: 1px solid #7a5a2a; }
+  .mode-badge.idle { background: #2a2a3e; color: #888; border: 1px solid #444; }
+
+  /* ---- Action Bar ---- */
+  .action-bar {
+    height: var(--action-bar-height);
+    background: var(--panel-bg);
+    border-top: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  /* Acting prompt */
+  .acting-prompt {
+    text-align: center;
+    min-width: 160px;
+  }
+  .acting-prompt .acting-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+  .acting-prompt .acting-name { font-size: 18px; font-weight: 700; }
+  .acting-prompt .acting-position { font-size: 13px; color: var(--text-secondary); }
+  .acting-prompt .acting-stack { font-size: 13px; color: #7bed7b; }
+
+  /* Action buttons */
+  .action-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .action-btn {
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: 700;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    min-width: 90px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .action-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .action-btn:active { transform: translateY(0); }
+  .action-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  .action-btn.fold { background: #6b2222; color: #fcc; border-color: #8b3333; }
+  .action-btn.check { background: #1a6b1a; color: #cfc; border-color: #2a8b2a; }
+  .action-btn.call { background: #1a6b1a; color: #cfc; border-color: #2a8b2a; }
+  .action-btn.bet { background: #6b5500; color: #fec; border-color: #8b7520; }
+  .action-btn.raise { background: #6b5500; color: #fec; border-color: #8b7520; }
+  .action-btn.allin { background: #5b2a6b; color: #ecf; border-color: #7b3a8b; }
+
+  /* Size input */
+  .size-input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .size-input-group label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+  .size-input {
+    width: 100px;
+    padding: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    background: #2a2a3e;
+    border: 2px solid #555;
+    border-radius: 6px;
+    color: var(--text-primary);
+  }
+  .size-input:focus { border-color: var(--btn-primary); outline: none; }
+
+  /* Nav buttons */
+  .nav-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    align-items: center;
+  }
+  .nav-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: var(--seat-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .nav-btn:hover { background: #2a2a3e; }
+  .nav-btn.primary { background: var(--btn-primary); border-color: var(--btn-primary); }
+  .nav-btn.primary:hover { background: #3a8fff; }
+  .nav-btn.warning { background: #8b5a00; border-color: #a07020; color: #fec; }
+  .nav-btn.warning:hover { background: #9b6a10; }
+  .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ---- Upload Screen ---- */
+  .screen { display: none; flex-direction: column; height: 100%; }
+  .screen.active { display: flex; }
+
+  .upload-screen {
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 40px;
+  }
+  .upload-screen h2 { font-size: 28px; font-weight: 300; }
+  .upload-screen p { color: var(--text-secondary); max-width: 500px; text-align: center; }
+  .upload-zone {
+    width: 500px;
+    max-width: 90%;
+    padding: 40px;
+    border: 2px dashed #555;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .upload-zone:hover { border-color: var(--btn-primary); }
+  .upload-zone.dragover { border-color: var(--btn-primary); background: rgba(42,127,255,0.05); }
+  .upload-zone input[type="file"] { display: none; }
+
+  .demo-btn {
+    padding: 12px 24px;
+    font-size: 15px;
+    background: var(--btn-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .demo-btn:hover { background: #3a8fff; }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ============= UPLOAD SCREEN ============= -->
+<div id="uploadScreen" class="screen upload-screen active">
+  <h1>Session Replayer</h1>
+  <p>Upload a session file or load the demo to get started.</p>
+  <div id="uploadZone" class="upload-zone">
+    <p>Drop a session file here (.json, .txt, .docx)</p>
+    <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
+    <input type="file" id="fileInput" accept=".json,.txt,.docx">
+  </div>
+  <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
+</div>
+
+<!-- ============= PLAYBACK SCREEN ============= -->
+<div id="playbackScreen" class="screen">
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <h1>Session Replayer</h1>
+    <span id="sessionNameDisplay" class="session-info"></span>
+    <div class="top-bar-controls">
+      <button id="toggleSidebarBtn" title="Toggle hand list">Hands</button>
+      <button id="loadNewBtn">Load New</button>
+    </div>
+  </div>
+
+  <div class="main-layout">
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <span>Hand List</span>
+        <span id="handCountDisplay">0 hands</span>
+      </div>
+      <div id="handList" class="hand-list"></div>
+      <div id="playerInfoPanel" class="player-info-panel">
+        <h3>Table Players</h3>
+        <div id="playerInfoList"></div>
+      </div>
+    </div>
+
+    <!-- Center -->
+    <div class="center-area">
+
+      <!-- Table -->
+      <div class="table-container">
+        <div id="tableFelt" class="table-felt">
+          <div class="pot-display">
+            <div class="pot-label">Pot</div>
+            <div id="potAmount" class="pot-amount">0</div>
+          </div>
+          <div id="boardCards" class="board-cards"></div>
+          <!-- Seats injected by JS -->
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <div class="status-item">
+          <span id="modeBadge" class="mode-badge idle">Idle</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Hand</span>
+          <span id="handProgress" class="status-value">--</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Step</span>
+          <span id="stepProgress" class="status-value">--</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Street</span>
+          <span id="currentStreet" class="status-value">--</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Pot</span>
+          <span id="statusPot" class="status-value">0</span>
+        </div>
+      </div>
+
+      <!-- Action Bar -->
+      <div class="action-bar">
+        <div id="actingPrompt" class="acting-prompt">
+          <div class="acting-label">Acting</div>
+          <div id="actingName" class="acting-name">--</div>
+          <div id="actingPosition" class="acting-position"></div>
+          <div id="actingStack" class="acting-stack"></div>
+        </div>
+
+        <div id="actionButtons" class="action-buttons">
+          <button id="btnFold" class="action-btn fold" disabled>Fold</button>
+          <button id="btnCheck" class="action-btn check" disabled>Check</button>
+          <button id="btnCall" class="action-btn call" disabled>Call</button>
+          <div class="size-input-group">
+            <label>Amount</label>
+            <input id="sizeInput" class="size-input" type="number" min="0" step="1" value="0">
+          </div>
+          <button id="btnBet" class="action-btn bet" disabled>Bet</button>
+          <button id="btnRaise" class="action-btn raise" disabled>Raise</button>
+          <button id="btnAllIn" class="action-btn allin" disabled>All In</button>
+        </div>
+
+        <div class="nav-buttons">
+          <button id="btnPrevStep" class="nav-btn" disabled>&lt;&lt; Prev</button>
+          <button id="btnNextStep" class="nav-btn primary" disabled>Next &gt;&gt;</button>
+          <button id="btnBackToScript" class="nav-btn warning" style="display:none">Back to Script</button>
+          <button id="btnPrevHand" class="nav-btn" disabled>&lt; Hand</button>
+          <button id="btnNextHand" class="nav-btn" disabled>Hand &gt;</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+window.__RTP_EMBEDDED_CARDS__ = {
+
+};
+</script>
+<script>
+// ---- constants.js ----
+// Shared constants for poker engine
+// Used by both RTP Drillz and Session Replayer
+
+const PokerConstants = (() => {
+  "use strict";
+
+  const RANKS = "23456789TJQKA".split("");
+  const SUITS = "shdc".split("");
+
+  const TABLE_POSITIONS_6MAX = ["BTN", "SB", "BB", "UTG", "HJ", "CO"];
+  const TABLE_POSITIONS_9MAX = ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO"];
+
+  const RANK_WORD = {
+    A: "ace", K: "king", Q: "queen", J: "jack", T: "10",
+    "9": "9", "8": "8", "7": "7", "6": "6", "5": "5", "4": "4", "3": "3", "2": "2"
+  };
+
+  const RANK_NAME = {
+    A: "Ace", K: "King", Q: "Queen", J: "Jack", T: "Ten",
+    "9": "Nine", "8": "Eight", "7": "Seven", "6": "Six",
+    "5": "Five", "4": "Four", "3": "Three", "2": "Two"
+  };
+
+  const SUIT_WORD = { s: "spades", h: "hearts", d: "diamonds", c: "clubs" };
+  const SUIT_NAME = { s: "Spades", h: "Hearts", d: "Diamonds", c: "Clubs" };
+
+  const SUIT_SYMBOL = { s: "\u2660", h: "\u2665", d: "\u2666", c: "\u2663" };
+  const SUIT_COLOR = { s: "#000", h: "#c00", d: "#c00", c: "#000" };
+
+  const CARD_PREFIXES = [
+    "", "cards/", "png-card-1.3/", "PNG-card-1.3/",
+    "PNG-cards-1.3/", "deck/", "images/", "img/"
+  ];
+
+  return {
+    RANKS, SUITS,
+    TABLE_POSITIONS_6MAX, TABLE_POSITIONS_9MAX,
+    RANK_WORD, RANK_NAME, SUIT_WORD, SUIT_NAME,
+    SUIT_SYMBOL, SUIT_COLOR,
+    CARD_PREFIXES
+  };
+})();
+
+if (typeof window !== "undefined") window.PokerConstants = PokerConstants;
+
+
+// ---- card_utils.js ----
+// Card utility functions shared across poker apps
+// Depends on: PokerConstants
+
+const CardUtils = (() => {
+  "use strict";
+
+  const C = typeof PokerConstants !== "undefined" ? PokerConstants : window.PokerConstants;
+
+  function formatCard(code) {
+    if (!code || code.length < 2) return "??";
+    return `${code[0].toUpperCase()}${code[1].toLowerCase()}`;
+  }
+
+  function cardPrettyName(code) {
+    if (!code || code.length < 2) return "that card";
+    const rank = code[0].toUpperCase();
+    const suit = code[1].toLowerCase();
+    return `${C.RANK_NAME[rank] || rank} of ${C.SUIT_NAME[suit] || suit}`;
+  }
+
+  function cardImageCandidates(code) {
+    const rank = code[0].toUpperCase();
+    const suit = code[1].toLowerCase();
+    const rankVariants = [rank, rank.toLowerCase()];
+    const suitVariants = [suit, suit.toUpperCase()];
+    if (rank === "T") rankVariants.push("10");
+
+    const out = [];
+    for (const prefix of C.CARD_PREFIXES) {
+      for (const r of rankVariants) {
+        for (const s of suitVariants) {
+          out.push(`${prefix}${r}${s}.png`);
+          out.push(`${prefix}${r}_${s}.png`);
+        }
+      }
+      const rankWord = C.RANK_WORD[rank];
+      const suitWord = C.SUIT_WORD[suit];
+      if (rankWord && suitWord) {
+        out.push(`${prefix}${rankWord}_of_${suitWord}.png`);
+        out.push(`${prefix}${rankWord}_of_${suitWord}2.png`);
+      }
+    }
+    return [...new Set(out)];
+  }
+
+  function backImageCandidates() {
+    const names = ["back.png", "card_back.png", "cardback.png", "red_back.png", "blue_back.png", "backside.png"];
+    const out = [];
+    for (const prefix of C.CARD_PREFIXES) {
+      for (const n of names) {
+        out.push(`${prefix}${n}`);
+      }
+    }
+    return out;
+  }
+
+  function buildGeneratedBackDataUri() {
+    const width = 140;
+    const height = 200;
+    const cell = 20;
+    let grid = "";
+    for (let y = 0; y < height; y += cell) {
+      for (let x = 0; x < width; x += cell) {
+        const isOrange = ((x / cell) + (y / cell)) % 2 === 0;
+        const fill = isOrange ? "#c85f00" : "#ffffff";
+        grid += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${fill}"/>`;
+      }
+    }
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+      `<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>` +
+      grid +
+      `<rect x="2" y="2" width="${width - 4}" height="${height - 4}" fill="none" stroke="#000000" stroke-width="4"/>` +
+      `</svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+
+  function buildFullDeck() {
+    const deck = [];
+    for (const rank of C.RANKS) {
+      for (const suit of C.SUITS) {
+        deck.push(`${rank}${suit}`);
+      }
+    }
+    return deck;
+  }
+
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
+
+  function rankValue(rank) {
+    return C.RANKS.indexOf(rank.toUpperCase()) + 2;
+  }
+
+  function attachImageWithFallback(img, fallbackEl, candidates) {
+    let idx = 0;
+    function tryNext() {
+      if (idx >= candidates.length) {
+        img.style.display = "none";
+        fallbackEl.style.display = "flex";
+        return;
+      }
+      img.src = candidates[idx];
+      idx += 1;
+    }
+    img.addEventListener("load", () => {
+      img.style.display = "";
+      fallbackEl.style.display = "none";
+    });
+    img.addEventListener("error", tryNext);
+    tryNext();
+  }
+
+  return {
+    formatCard,
+    cardPrettyName,
+    cardImageCandidates,
+    backImageCandidates,
+    buildGeneratedBackDataUri,
+    buildFullDeck,
+    shuffle,
+    rankValue,
+    attachImageWithFallback
+  };
+})();
+
+if (typeof window !== "undefined") window.CardUtils = CardUtils;
+
+
+// ---- table_engine.js ----
+// Shared poker table engine — pure game logic, no DOM
+// Depends on: PokerConstants, CardUtils
+//
+// All functions accept state objects as parameters rather than reading globals.
+// The consuming app owns the state; this module operates on it.
+
+const PokerEngine = (() => {
+  "use strict";
+
+  const C = typeof PokerConstants !== "undefined" ? PokerConstants : window.PokerConstants;
+
+  // ---- Utility ----
+
+  function clonePlainObject(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function normalizeActionName(action) {
+    const key = String(action || "").trim().toLowerCase().replace(/\s+/g, "-");
+    return key === "allin" ? "all-in" : key;
+  }
+
+  // ---- Seat Arithmetic ----
+
+  function seatAtOffset(startSeat, offset, seatCount) {
+    const wrapped = startSeat + offset;
+    return ((wrapped % seatCount) + seatCount) % seatCount;
+  }
+
+  function computePositionsFromButton(buttonSeat, seatCount, positionArray) {
+    if (!positionArray) {
+      positionArray = seatCount === 9 ? C.TABLE_POSITIONS_9MAX : C.TABLE_POSITIONS_6MAX;
+    }
+    const seatToPosition = {};
+    positionArray.forEach((position, idx) => {
+      const seat = seatAtOffset(buttonSeat, idx, seatCount);
+      seatToPosition[seat] = position;
+    });
+    return seatToPosition;
+  }
+
+  function findSeatByPosition(players, position) {
+    const found = players.find((p) => p.position === position);
+    return found ? found.seat : -1;
+  }
+
+  function getPlayerBySeat(players, seat) {
+    return players.find((p) => p.seat === seat) || null;
+  }
+
+  // ---- Player State ----
+
+  function createPlayerState(seat, stackChips, name) {
+    return {
+      seat,
+      name: name || `Seat ${seat + 1}`,
+      description: "",
+      position: "",
+      stackStart: stackChips,
+      stack: stackChips,
+      committedStreet: 0,
+      committedHand: 0,
+      status: stackChips > 0 ? "active" : "allin"
+    };
+  }
+
+  function restorePlayersToStackStart(players) {
+    players.forEach((player) => {
+      const baseline = Math.max(0, Math.round(Number(player.stackStart) || 0));
+      player.stack = baseline;
+      player.committedStreet = 0;
+      player.committedHand = 0;
+      player.status = baseline > 0 ? "active" : "allin";
+    });
+  }
+
+  // ---- Table State Factory ----
+
+  function createTableState(opts) {
+    const o = opts || {};
+    return {
+      buttonSeat: o.buttonSeat || 0,
+      heroSeat: Number.isInteger(o.heroSeat) ? o.heroSeat : 0,
+      street: "preflop",
+      pot: 0,
+      toCall: 0,
+      minRaiseTo: 0,
+      lastAggressorSeat: -1,
+      lastFullRaiseSize: 0,
+      actionSeat: -1,
+      pendingActionSeats: [],
+      headsUpLocked: false,
+      pendingHeadsUpAggressorSeat: -1,
+      handNumber: o.handNumber || 0,
+      betInputTo: 0,
+      streetSnapshots: {},
+      preflopScript: [],
+      preflopScriptName: ""
+    };
+  }
+
+  // ---- Seat Queries ----
+
+  function seatsStillInHand(players) {
+    return players.filter((p) => p.status !== "folded").map((p) => p.seat);
+  }
+
+  function firstActiveSeatFrom(startSeat, players, seatCount) {
+    for (let offset = 0; offset < seatCount; offset += 1) {
+      const seat = seatAtOffset(startSeat, offset, seatCount);
+      const player = getPlayerBySeat(players, seat);
+      if (player && player.status === "active") return seat;
+    }
+    return -1;
+  }
+
+  function firstActionSeatForStreet(street, players, tableState, seatCount) {
+    if (street === "preflop") {
+      const bbSeat = findSeatByPosition(players, "BB");
+      if (bbSeat < 0) return -1;
+      return firstActiveSeatFrom(seatAtOffset(bbSeat, 1, seatCount), players, seatCount);
+    }
+    return firstActiveSeatFrom(seatAtOffset(tableState.buttonSeat, 1, seatCount), players, seatCount);
+  }
+
+  function activeActionSeatsInOrderFrom(startSeat, players, seatCount) {
+    const ordered = [];
+    for (let offset = 0; offset < seatCount; offset += 1) {
+      const seat = seatAtOffset(startSeat, offset, seatCount);
+      const player = getPlayerBySeat(players, seat);
+      if (player && player.status === "active") ordered.push(seat);
+    }
+    return ordered;
+  }
+
+  // ---- Pending Action Seats ----
+
+  function resetPendingActionSeatsFrom(startSeat, players, tableState, seatCount, excludedSeats) {
+    if (!Number.isInteger(startSeat) || startSeat < 0) {
+      tableState.pendingActionSeats = [];
+      tableState.actionSeat = -1;
+      return [];
+    }
+    const excluded = new Set((excludedSeats || []).filter((s) => Number.isInteger(s) && s >= 0));
+    const ordered = activeActionSeatsInOrderFrom(startSeat, players, seatCount).filter((s) => !excluded.has(s));
+    tableState.pendingActionSeats = ordered;
+    tableState.actionSeat = ordered.length ? ordered[0] : -1;
+    return ordered;
+  }
+
+  function sanitizePendingActionSeats(players, tableState) {
+    const validActive = new Set(
+      players.filter((p) => p.status === "active").map((p) => p.seat)
+    );
+    const deduped = [];
+    const seen = new Set();
+    tableState.pendingActionSeats.forEach((seat) => {
+      if (!validActive.has(seat) || seen.has(seat)) return;
+      seen.add(seat);
+      deduped.push(seat);
+    });
+    tableState.pendingActionSeats = deduped;
+    if (!deduped.includes(tableState.actionSeat)) {
+      tableState.actionSeat = deduped.length ? deduped[0] : -1;
+    }
+    return deduped;
+  }
+
+  function removePendingActionSeat(seat, players, tableState) {
+    tableState.pendingActionSeats = tableState.pendingActionSeats.filter((s) => s !== seat);
+    sanitizePendingActionSeats(players, tableState);
+  }
+
+  function nextPendingActionSeatFrom(currentSeat, players, tableState, seatCount) {
+    sanitizePendingActionSeats(players, tableState);
+    const pending = tableState.pendingActionSeats;
+    if (!pending.length) {
+      tableState.actionSeat = -1;
+      return -1;
+    }
+    for (let offset = 1; offset <= seatCount; offset += 1) {
+      const seat = seatAtOffset(currentSeat, offset, seatCount);
+      if (pending.includes(seat)) {
+        tableState.actionSeat = seat;
+        return seat;
+      }
+    }
+    tableState.actionSeat = pending[0];
+    return pending[0];
+  }
+
+  // ---- Pot / Betting Math ----
+
+  function recomputePotAndToCall(players, tableState) {
+    let pot = 0;
+    let toCall = 0;
+    players.forEach((player) => {
+      pot += player.committedHand;
+      if (player.status !== "folded") {
+        toCall = Math.max(toCall, player.committedStreet);
+      }
+    });
+    tableState.pot = pot;
+    tableState.toCall = toCall;
+  }
+
+  function recomputeMinRaiseTo(tableState, bigBlind) {
+    const toCall = tableState.toCall;
+    if (toCall <= 0) {
+      tableState.minRaiseTo = bigBlind;
+      return;
+    }
+    const raiseSize =
+      Number.isFinite(tableState.lastFullRaiseSize) && tableState.lastFullRaiseSize > 0
+        ? tableState.lastFullRaiseSize
+        : bigBlind;
+    tableState.minRaiseTo = toCall + raiseSize;
+  }
+
+  function roundToWholeBb(chips, bigBlind) {
+    const numeric = Number(chips);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return Math.round(numeric / bigBlind) * bigBlind;
+  }
+
+  // ---- Legal Actions ----
+
+  function getLegalActions(seat, players, tableState) {
+    const player = getPlayerBySeat(players, seat);
+    if (!player || player.status !== "active") {
+      return {
+        fold: false, check: false, call: false, bet: false,
+        raise: false, allIn: false, toCall: 0, minRaiseTo: 0, maxCommit: 0
+      };
+    }
+
+    const toCall = Math.max(0, tableState.toCall - player.committedStreet);
+    const maxCommit = player.committedStreet + player.stack;
+    const canCheck = toCall === 0;
+    const canCall = toCall > 0 && player.stack > 0;
+    const canBet = toCall === 0 && player.stack > 0;
+    const canRaise =
+      toCall > 0 &&
+      player.stack > toCall &&
+      maxCommit >= tableState.minRaiseTo &&
+      maxCommit > tableState.toCall;
+
+    return {
+      fold: true, check: canCheck, call: canCall, bet: canBet,
+      raise: canRaise, allIn: player.stack > 0,
+      toCall, minRaiseTo: tableState.minRaiseTo, maxCommit
+    };
+  }
+
+  // ---- Apply Actions ----
+
+  function applyCommittedChips(player, targetStreetCommit) {
+    const safeTarget = Math.max(player.committedStreet, Math.min(targetStreetCommit, player.committedStreet + player.stack));
+    const delta = safeTarget - player.committedStreet;
+    if (delta <= 0) return 0;
+    player.stack -= delta;
+    player.committedStreet += delta;
+    player.committedHand += delta;
+    if (player.stack === 0) player.status = "allin";
+    return delta;
+  }
+
+  /**
+   * Apply a player action to the game state.
+   * Returns { success, actionCommit, targetStreetCommit } or { success: false }.
+   */
+  function applyPlayerAction(seat, action, sizeChips, players, tableState, seatCount, bigBlind) {
+    const player = getPlayerBySeat(players, seat);
+    if (!player || player.status !== "active") return { success: false };
+
+    const legal = getLegalActions(seat, players, tableState);
+    const toCall = legal.toCall;
+    const priorToCall = tableState.toCall;
+    let actionCommit = 0;
+    let targetStreetCommit = player.committedStreet;
+    let aggressiveRaiseCreated = false;
+
+    if (action === "fold") {
+      player.status = "folded";
+    } else if (action === "check") {
+      if (!legal.check) return { success: false };
+    } else if (action === "call") {
+      if (!legal.call) return { success: false };
+      targetStreetCommit = player.committedStreet + toCall;
+      actionCommit = applyCommittedChips(player, targetStreetCommit);
+    } else if (action === "bet") {
+      if (!legal.bet) return { success: false };
+      const desired = Math.max(bigBlind, roundToWholeBb(sizeChips, bigBlind));
+      targetStreetCommit = Math.min(legal.maxCommit, desired);
+      actionCommit = applyCommittedChips(player, targetStreetCommit);
+      if (targetStreetCommit > priorToCall) {
+        tableState.lastFullRaiseSize = targetStreetCommit - priorToCall;
+        tableState.lastAggressorSeat = seat;
+        aggressiveRaiseCreated = true;
+      }
+    } else if (action === "raise") {
+      if (!legal.raise) return { success: false };
+      const desired = roundToWholeBb(sizeChips, bigBlind);
+      const minRaiseTo = tableState.minRaiseTo;
+      const capped = Math.min(legal.maxCommit, desired);
+      if (capped < minRaiseTo && legal.maxCommit > minRaiseTo) return { success: false };
+      targetStreetCommit = Math.max(priorToCall, capped);
+      if (targetStreetCommit <= priorToCall) return { success: false };
+      actionCommit = applyCommittedChips(player, targetStreetCommit);
+      const raiseSize = targetStreetCommit - priorToCall;
+      if (raiseSize >= tableState.lastFullRaiseSize) {
+        tableState.lastFullRaiseSize = raiseSize;
+      }
+      tableState.lastAggressorSeat = seat;
+      aggressiveRaiseCreated = true;
+    } else if (action === "all-in") {
+      if (!legal.allIn) return { success: false };
+      targetStreetCommit = legal.maxCommit;
+      if (targetStreetCommit <= player.committedStreet) return { success: false };
+      actionCommit = applyCommittedChips(player, targetStreetCommit);
+      if (targetStreetCommit > priorToCall) {
+        const raiseSize = targetStreetCommit - priorToCall;
+        if (raiseSize >= tableState.lastFullRaiseSize) {
+          tableState.lastFullRaiseSize = raiseSize;
+        }
+        tableState.lastAggressorSeat = seat;
+        aggressiveRaiseCreated = true;
+      }
+    } else {
+      return { success: false };
+    }
+
+    // Update pending action seats
+    if (aggressiveRaiseCreated) {
+      tableState.pendingHeadsUpAggressorSeat = seat;
+      resetPendingActionSeatsFrom(seatAtOffset(seat, 1, seatCount), players, tableState, seatCount, [seat]);
+    } else if (action !== "call") {
+      tableState.pendingHeadsUpAggressorSeat = -1;
+      removePendingActionSeat(seat, players, tableState);
+    } else {
+      removePendingActionSeat(seat, players, tableState);
+    }
+
+    // Heads-up auto-fold on call
+    if (
+      action === "call" &&
+      toCall > 0 &&
+      tableState.pendingHeadsUpAggressorSeat >= 0 &&
+      seat !== tableState.pendingHeadsUpAggressorSeat
+    ) {
+      autoFoldRemainingPlayers(players, tableState, seatCount, [tableState.pendingHeadsUpAggressorSeat, seat]);
+    }
+
+    recomputePotAndToCall(players, tableState);
+    recomputeMinRaiseTo(tableState, bigBlind);
+    maybeLockHeadsUp(players, tableState);
+    sanitizePendingActionSeats(players, tableState);
+
+    if (tableState.pendingActionSeats.length) {
+      nextPendingActionSeatFrom(seat, players, tableState, seatCount);
+    } else {
+      tableState.actionSeat = -1;
+    }
+
+    return {
+      success: true,
+      actionCommit,
+      targetStreetCommit,
+      aggressiveRaiseCreated
+    };
+  }
+
+  // ---- Heads-Up Logic ----
+
+  function maybeLockHeadsUp(players, tableState) {
+    const inHand = seatsStillInHand(players);
+    tableState.headsUpLocked = inHand.length <= 2;
+    return tableState.headsUpLocked;
+  }
+
+  function autoFoldRemainingPlayers(players, tableState, seatCount, keepSeats) {
+    const keepSet = new Set((keepSeats || []).filter((s) => Number.isInteger(s) && s >= 0));
+    players.forEach((player) => {
+      if (keepSet.has(player.seat)) return;
+      if (player.status === "active") player.status = "folded";
+    });
+    recomputePotAndToCall(players, tableState);
+    sanitizePendingActionSeats(players, tableState);
+    maybeLockHeadsUp(players, tableState);
+  }
+
+  // ---- Betting Round Queries ----
+
+  function isBettingRoundComplete(players, tableState) {
+    if (tableState.actionSeat < 0) return true;
+    const pending = tableState.pendingActionSeats;
+    if (!pending.length) return true;
+    const active = players.filter((p) => p.status === "active");
+    return active.length === 0;
+  }
+
+  function isHandWonByFold(players) {
+    const inHand = players.filter((p) => p.status !== "folded");
+    return inHand.length <= 1;
+  }
+
+  // ---- Street Management ----
+
+  function beginStreetRound(street, players, tableState, seatCount, bigBlind) {
+    tableState.street = street;
+    players.forEach((player) => {
+      if (player.status !== "folded") player.committedStreet = 0;
+    });
+    tableState.toCall = 0;
+    tableState.minRaiseTo = bigBlind;
+    tableState.lastAggressorSeat = -1;
+    tableState.lastFullRaiseSize = bigBlind;
+    tableState.pendingHeadsUpAggressorSeat = -1;
+    tableState.actionSeat = firstActionSeatForStreet(street, players, tableState, seatCount);
+    tableState.betInputTo = bigBlind;
+    resetPendingActionSeatsFrom(tableState.actionSeat, players, tableState, seatCount);
+    recomputePotAndToCall(players, tableState);
+    recomputeMinRaiseTo(tableState, bigBlind);
+    maybeLockHeadsUp(players, tableState);
+  }
+
+  // ---- Blind Posting ----
+
+  function postBlindForSeat(seat, blindAmount, players) {
+    const player = getPlayerBySeat(players, seat);
+    if (!player || player.status !== "active") return 0;
+    const amount = Math.max(0, Math.min(blindAmount, player.stack));
+    if (amount === 0) return 0;
+    player.stack -= amount;
+    player.committedStreet += amount;
+    player.committedHand += amount;
+    if (player.stack === 0) player.status = "allin";
+    return amount;
+  }
+
+  function postBlinds(players, tableState, seatCount, smallBlind, bigBlind) {
+    const sbSeat = findSeatByPosition(players, "SB");
+    const bbSeat = findSeatByPosition(players, "BB");
+    if (sbSeat < 0 || bbSeat < 0) return;
+
+    postBlindForSeat(sbSeat, smallBlind, players);
+    postBlindForSeat(bbSeat, bigBlind, players);
+    recomputePotAndToCall(players, tableState);
+
+    tableState.minRaiseTo = tableState.toCall + bigBlind;
+    tableState.lastAggressorSeat = bbSeat;
+    tableState.lastFullRaiseSize = bigBlind;
+    tableState.actionSeat = seatAtOffset(bbSeat, 1, seatCount);
+    tableState.pendingActionSeats = [];
+    tableState.betInputTo = tableState.minRaiseTo;
+  }
+
+  // ---- Snapshots ----
+
+  function captureStreetSnapshot(street, boardBase, players, tableState) {
+    tableState.streetSnapshots[street] = {
+      stage: street,
+      boardBase: (boardBase || []).slice(),
+      players: clonePlainObject(players),
+      tableState: clonePlainObject({
+        ...tableState,
+        streetSnapshots: {}
+      })
+    };
+  }
+
+  function restoreStreetSnapshot(street, tableState) {
+    const snapshot = tableState.streetSnapshots[street];
+    if (!snapshot) return null;
+    return {
+      players: clonePlainObject(snapshot.players),
+      tableState: {
+        ...clonePlainObject(snapshot.tableState),
+        streetSnapshots: tableState.streetSnapshots
+      },
+      stage: snapshot.stage,
+      board: snapshot.boardBase.slice()
+    };
+  }
+
+  // ---- Initialize a Hand ----
+
+  /**
+   * Set up players and table state for a new hand.
+   * @param {Object} opts
+   * @param {number} opts.seatCount - 6 or 9
+   * @param {number} opts.buttonSeat
+   * @param {number} opts.heroSeat
+   * @param {Object} opts.stacks - { seatNumber: chipCount }
+   * @param {number} opts.smallBlind
+   * @param {number} opts.bigBlind
+   * @param {Object} opts.playerNames - { seatNumber: { name, description } }
+   * @param {string[]} [opts.positionArray] - override position labels
+   * @returns {{ players: Array, tableState: Object }}
+   */
+  function initializeHand(opts) {
+    const sc = opts.seatCount || 9;
+    const posArray = opts.positionArray || (sc === 9 ? C.TABLE_POSITIONS_9MAX : C.TABLE_POSITIONS_6MAX);
+    const seatToPosition = computePositionsFromButton(opts.buttonSeat, sc, posArray);
+
+    const players = [];
+    for (let seat = 0; seat < sc; seat += 1) {
+      const stackChips = (opts.stacks && opts.stacks[seat + 1]) || (opts.stacks && opts.stacks[seat]) || opts.defaultStack || 1000;
+      const info = (opts.playerNames && (opts.playerNames[seat + 1] || opts.playerNames[seat])) || {};
+      const player = createPlayerState(seat, stackChips, info.name);
+      player.description = info.description || "";
+      player.position = seatToPosition[seat] || "";
+      players.push(player);
+    }
+
+    const tableState = createTableState({
+      buttonSeat: opts.buttonSeat,
+      heroSeat: Number.isInteger(opts.heroSeat) ? opts.heroSeat : 0,
+      handNumber: opts.handNumber || 0
+    });
+
+    // Post blinds
+    postBlinds(players, tableState, sc, opts.smallBlind || 5, opts.bigBlind || 10);
+    resetPendingActionSeatsFrom(tableState.actionSeat, players, tableState, sc);
+
+    return { players, tableState };
+  }
+
+  // ---- Public API ----
+
+  return {
+    // Utility
+    clonePlainObject,
+    normalizeActionName,
+
+    // Seat arithmetic
+    seatAtOffset,
+    computePositionsFromButton,
+    findSeatByPosition,
+    getPlayerBySeat,
+
+    // Player state
+    createPlayerState,
+    restorePlayersToStackStart,
+
+    // Table state
+    createTableState,
+
+    // Seat queries
+    seatsStillInHand,
+    firstActiveSeatFrom,
+    firstActionSeatForStreet,
+    activeActionSeatsInOrderFrom,
+
+    // Pending action seats
+    resetPendingActionSeatsFrom,
+    sanitizePendingActionSeats,
+    removePendingActionSeat,
+    nextPendingActionSeatFrom,
+
+    // Pot / betting math
+    recomputePotAndToCall,
+    recomputeMinRaiseTo,
+    roundToWholeBb,
+
+    // Legal actions
+    getLegalActions,
+
+    // Apply actions
+    applyCommittedChips,
+    applyPlayerAction,
+
+    // Heads-up logic
+    maybeLockHeadsUp,
+    autoFoldRemainingPlayers,
+
+    // Betting round queries
+    isBettingRoundComplete,
+    isHandWonByFold,
+
+    // Street management
+    beginStreetRound,
+
+    // Blind posting
+    postBlindForSeat,
+    postBlinds,
+
+    // Snapshots
+    captureStreetSnapshot,
+    restoreStreetSnapshot,
+
+    // Hand initialization
+    initializeHand
+  };
+})();
+
+if (typeof window !== "undefined") window.PokerEngine = PokerEngine;
+
+</script>
+<script>
+/* ============================================================
+   SESSION REPLAYER — Application Logic
+   ============================================================ */
+(function () {
+  "use strict";
+
+  const SEAT_COUNT = 9;
+  const SEAT_VISUAL_POSITIONS = [
+    "bottom-center",     // seat 0 (hero default)
+    "bottom-left",       // seat 1
+    "mid-left",          // seat 2
+    "top-left",          // seat 3
+    "top-left-center",   // seat 4
+    "top-center",        // seat 5
+    "top-right-center",  // seat 6
+    "top-right",         // seat 7
+    "mid-right"          // seat 8
+  ];
+
+  const PE = window.PokerEngine;
+  const CU = window.CardUtils;
+  const CC = window.PokerConstants;
+  const EMBEDDED_CARDS = (window.__RTP_EMBEDDED_CARDS__ && typeof window.__RTP_EMBEDDED_CARDS__ === "object")
+    ? window.__RTP_EMBEDDED_CARDS__ : {};
+  const GENERATED_BACK = CU.buildGeneratedBackDataUri();
+
+  // ---- State ----
+
+  const session = {
+    loaded: false,
+    name: "",
+    hands: [],       // HandRecord[]
+    players: {},     // { seatNumber: { name, description } }
+    blinds: { small: 5, big: 10 }
+  };
+
+  const playback = {
+    mode: "idle",                 // idle | script | branch
+    currentHandIndex: -1,
+    currentStepIndex: -1,
+    totalSteps: 0,
+    flatActions: [],              // flattened action list for current hand
+    streetBoundaries: {},         // { flop: stepIdx, turn: stepIdx, river: stepIdx }
+    branchPoint: null,
+    // Engine state
+    players: [],
+    tableState: null,
+    board: [],
+    heroCards: [],
+    knownVillainCards: {},
+    currentStreet: "preflop",
+    actionCallouts: {}            // { seat: { action, amount, timer } }
+  };
+
+  // ---- DOM Refs ----
+
+  const els = {
+    uploadScreen: document.getElementById("uploadScreen"),
+    playbackScreen: document.getElementById("playbackScreen"),
+    uploadZone: document.getElementById("uploadZone"),
+    fileInput: document.getElementById("fileInput"),
+    loadDemoBtn: document.getElementById("loadDemoBtn"),
+    sessionNameDisplay: document.getElementById("sessionNameDisplay"),
+    toggleSidebarBtn: document.getElementById("toggleSidebarBtn"),
+    loadNewBtn: document.getElementById("loadNewBtn"),
+    sidebar: document.getElementById("sidebar"),
+    handList: document.getElementById("handList"),
+    handCountDisplay: document.getElementById("handCountDisplay"),
+    playerInfoPanel: document.getElementById("playerInfoPanel"),
+    playerInfoList: document.getElementById("playerInfoList"),
+    tableFelt: document.getElementById("tableFelt"),
+    potAmount: document.getElementById("potAmount"),
+    boardCards: document.getElementById("boardCards"),
+    modeBadge: document.getElementById("modeBadge"),
+    handProgress: document.getElementById("handProgress"),
+    stepProgress: document.getElementById("stepProgress"),
+    currentStreet: document.getElementById("currentStreet"),
+    statusPot: document.getElementById("statusPot"),
+    actingName: document.getElementById("actingName"),
+    actingPosition: document.getElementById("actingPosition"),
+    actingStack: document.getElementById("actingStack"),
+    btnFold: document.getElementById("btnFold"),
+    btnCheck: document.getElementById("btnCheck"),
+    btnCall: document.getElementById("btnCall"),
+    btnBet: document.getElementById("btnBet"),
+    btnRaise: document.getElementById("btnRaise"),
+    btnAllIn: document.getElementById("btnAllIn"),
+    sizeInput: document.getElementById("sizeInput"),
+    btnPrevStep: document.getElementById("btnPrevStep"),
+    btnNextStep: document.getElementById("btnNextStep"),
+    btnBackToScript: document.getElementById("btnBackToScript"),
+    btnPrevHand: document.getElementById("btnPrevHand"),
+    btnNextHand: document.getElementById("btnNextHand"),
+    seatElements: []
+  };
+
+  // ---- Screen Management ----
+
+  function showScreen(name) {
+    els.uploadScreen.classList.toggle("active", name === "upload");
+    els.playbackScreen.classList.toggle("active", name === "playback");
+  }
+
+  // ---- Seat Rendering ----
+
+  function createSeatElements() {
+    for (let i = 0; i < SEAT_COUNT; i += 1) {
+      const seat = document.createElement("div");
+      seat.className = "seat";
+      seat.dataset.seat = i;
+      seat.dataset.visual = SEAT_VISUAL_POSITIONS[i];
+
+      seat.innerHTML = `
+        <div class="seat-chip">
+          <div class="seat-position" data-seat-position></div>
+          <div class="seat-name" data-seat-name>Seat ${i + 1}</div>
+          <div class="seat-stack" data-seat-stack>--</div>
+          <div class="seat-cards" data-seat-cards></div>
+        </div>
+        <div class="seat-action" data-seat-action></div>
+      `;
+
+      seat.querySelector(".seat-chip").addEventListener("click", () => onSeatClicked(i));
+      els.tableFelt.appendChild(seat);
+      els.seatElements.push(seat);
+    }
+  }
+
+  function renderSeats() {
+    if (!playback.players.length) return;
+
+    for (let i = 0; i < SEAT_COUNT; i += 1) {
+      const el = els.seatElements[i];
+      const player = PE.getPlayerBySeat(playback.players, i);
+      if (!player) continue;
+
+      el.querySelector("[data-seat-position]").textContent = player.position || "";
+      el.querySelector("[data-seat-name]").textContent = player.name || `Seat ${i + 1}`;
+      el.querySelector("[data-seat-stack]").textContent = player.stack;
+
+      el.classList.toggle("acting", playback.tableState && playback.tableState.actionSeat === i);
+      el.classList.toggle("hero", playback.tableState && playback.tableState.heroSeat === i);
+      el.classList.toggle("folded", player.status === "folded");
+
+      // Cards
+      const cardsEl = el.querySelector("[data-seat-cards]");
+      cardsEl.innerHTML = "";
+
+      const isHero = playback.tableState && playback.tableState.heroSeat === i;
+      const knownCards = isHero ? playback.heroCards : (playback.knownVillainCards[i] || []);
+      const isShowdown = playback.currentStreet === "showdown";
+      const showCards = isHero || (isShowdown && knownCards.length > 0);
+
+      if (player.status !== "folded" && playback.mode !== "idle") {
+        if (showCards && knownCards.length > 0) {
+          knownCards.forEach((card) => {
+            const cardEl = document.createElement("div");
+            cardEl.className = "seat-card";
+            renderCardContent(cardEl, card);
+            cardsEl.appendChild(cardEl);
+          });
+        } else if (player.status !== "folded") {
+          for (let c = 0; c < 2; c += 1) {
+            const cardEl = document.createElement("div");
+            cardEl.className = "seat-card face-down";
+            cardsEl.appendChild(cardEl);
+          }
+        }
+      }
+
+      // Action callout
+      const actionEl = el.querySelector("[data-seat-action]");
+      const callout = playback.actionCallouts[i];
+      if (callout) {
+        let text = callout.action;
+        if (callout.amount && callout.action !== "fold" && callout.action !== "check") {
+          text += ` ${callout.amount}`;
+        }
+        actionEl.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+        actionEl.className = `seat-action visible ${callout.action}`;
+      } else {
+        actionEl.className = "seat-action";
+      }
+    }
+  }
+
+  function renderCardContent(el, cardCode) {
+    if (!cardCode) return;
+    const formatted = CU.formatCard(cardCode);
+    const rank = formatted[0];
+    const suit = formatted[1].toLowerCase();
+    const symbol = CC.SUIT_SYMBOL[suit] || suit;
+    const color = CC.SUIT_COLOR[suit] || "#000";
+
+    // Try embedded image first
+    const candidates = CU.cardImageCandidates(cardCode);
+    let found = false;
+    for (const key of candidates) {
+      if (EMBEDDED_CARDS[key]) {
+        const img = document.createElement("img");
+        img.src = EMBEDDED_CARDS[key];
+        el.appendChild(img);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      el.innerHTML = `<span style="color:${color}">${rank}${symbol}</span>`;
+    }
+  }
+
+  // ---- Board Rendering ----
+
+  function renderBoard() {
+    els.boardCards.innerHTML = "";
+    const boardSlots = 5;
+    for (let i = 0; i < boardSlots; i += 1) {
+      const card = playback.board[i];
+      const el = document.createElement("div");
+      el.className = "board-card" + (card ? "" : " empty");
+      if (card) renderCardContent(el, card);
+      els.boardCards.appendChild(el);
+    }
+  }
+
+  // ---- Pot & Status ----
+
+  function renderStatus() {
+    const pot = playback.tableState ? playback.tableState.pot : 0;
+    els.potAmount.textContent = pot;
+    els.statusPot.textContent = pot;
+
+    els.handProgress.textContent = session.hands.length
+      ? `${playback.currentHandIndex + 1} / ${session.hands.length}`
+      : "--";
+
+    els.stepProgress.textContent = playback.totalSteps
+      ? `${Math.max(0, playback.currentStepIndex + 1)} / ${playback.totalSteps}`
+      : "--";
+
+    els.currentStreet.textContent = playback.currentStreet || "--";
+
+    // Mode badge
+    els.modeBadge.className = `mode-badge ${playback.mode}`;
+    els.modeBadge.textContent = playback.mode === "idle" ? "Idle" : playback.mode === "script" ? "Script" : "Branch";
+
+    // Acting prompt
+    if (playback.tableState && playback.tableState.actionSeat >= 0) {
+      const player = PE.getPlayerBySeat(playback.players, playback.tableState.actionSeat);
+      if (player) {
+        els.actingName.textContent = player.name;
+        els.actingPosition.textContent = player.position;
+        els.actingStack.textContent = `Stack: ${player.stack}`;
+      }
+    } else {
+      els.actingName.textContent = "--";
+      els.actingPosition.textContent = "";
+      els.actingStack.textContent = "";
+    }
+  }
+
+  // ---- Action Buttons ----
+
+  function updateActionButtons() {
+    const inBranch = playback.mode === "branch";
+    const hasSeat = playback.tableState && playback.tableState.actionSeat >= 0;
+
+    if (inBranch && hasSeat) {
+      const legal = PE.getLegalActions(playback.tableState.actionSeat, playback.players, playback.tableState);
+      els.btnFold.disabled = !legal.fold;
+      els.btnCheck.disabled = !legal.check;
+      els.btnCall.disabled = !legal.call;
+      els.btnCall.textContent = legal.call ? `Call ${legal.toCall}` : "Call";
+      els.btnBet.disabled = !legal.bet;
+      els.btnRaise.disabled = !legal.raise;
+      els.btnAllIn.disabled = !legal.allIn;
+      els.sizeInput.value = legal.minRaiseTo || session.blinds.big;
+    } else {
+      els.btnFold.disabled = true;
+      els.btnCheck.disabled = true;
+      els.btnCall.disabled = true;
+      els.btnCall.textContent = "Call";
+      els.btnBet.disabled = true;
+      els.btnRaise.disabled = true;
+      els.btnAllIn.disabled = true;
+    }
+
+    // Nav buttons
+    const hasSession = session.hands.length > 0;
+    const inScript = playback.mode === "script";
+    els.btnNextStep.disabled = !(inScript && playback.currentStepIndex < playback.totalSteps - 1);
+    els.btnPrevStep.disabled = !(inScript && playback.currentStepIndex >= 0);
+    els.btnNextHand.disabled = !(hasSession && playback.currentHandIndex < session.hands.length - 1);
+    els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
+    els.btnBackToScript.style.display = inBranch ? "" : "none";
+  }
+
+  // ---- Full Render ----
+
+  function render() {
+    renderSeats();
+    renderBoard();
+    renderStatus();
+    updateActionButtons();
+  }
+
+  // ---- Action Callouts ----
+
+  const ACTION_CALLOUT_MS = 2000;
+  const calloutTimers = {};
+
+  function showActionCallout(seat, action, amount) {
+    if (calloutTimers[seat]) clearTimeout(calloutTimers[seat]);
+    playback.actionCallouts[seat] = { action, amount };
+    calloutTimers[seat] = setTimeout(() => {
+      delete playback.actionCallouts[seat];
+      render();
+    }, ACTION_CALLOUT_MS);
+  }
+
+  function clearAllCallouts() {
+    Object.keys(calloutTimers).forEach((k) => clearTimeout(calloutTimers[k]));
+    Object.keys(calloutTimers).forEach((k) => delete calloutTimers[k]);
+    playback.actionCallouts = {};
+  }
+
+  // ---- Session Loading ----
+
+  function loadSession(data) {
+    session.loaded = true;
+    session.name = data.session_name || "Unnamed Session";
+    session.hands = data.hands || [];
+    session.players = data.players || {};
+    session.blinds = data.blinds || { small: 5, big: 10 };
+
+    els.sessionNameDisplay.textContent = session.name;
+    els.handCountDisplay.textContent = `${session.hands.length} hands`;
+
+    renderHandList();
+    renderPlayerInfo();
+
+    if (session.hands.length > 0) {
+      loadHand(0);
+    }
+
+    showScreen("playback");
+  }
+
+  // ---- Hand List ----
+
+  function renderHandList() {
+    els.handList.innerHTML = "";
+    session.hands.forEach((hand, idx) => {
+      const item = document.createElement("div");
+      item.className = "hand-list-item" + (idx === playback.currentHandIndex ? " active" : "");
+      const heroCards = (hand.hero_cards || []).map(CU.formatCard).join(" ") || "??";
+      const result = hand.result ? (hand.result.showdown ? "SD" : "No SD") : "";
+      item.innerHTML = `
+        <span class="hand-num">#${hand.hand_id || idx + 1}</span>
+        <span class="hand-summary">${heroCards} ${result}</span>
+        <button class="star-btn ${hand.coach_flags && hand.coach_flags.starred ? "starred" : ""}" data-idx="${idx}">${hand.coach_flags && hand.coach_flags.starred ? "\u2605" : "\u2606"}</button>
+      `;
+      item.addEventListener("click", (e) => {
+        if (e.target.classList.contains("star-btn")) {
+          toggleStar(idx);
+          return;
+        }
+        loadHand(idx);
+      });
+      els.handList.appendChild(item);
+    });
+  }
+
+  function toggleStar(idx) {
+    const hand = session.hands[idx];
+    if (!hand.coach_flags) hand.coach_flags = {};
+    hand.coach_flags.starred = !hand.coach_flags.starred;
+    renderHandList();
+  }
+
+  function renderPlayerInfo() {
+    els.playerInfoList.innerHTML = "";
+    const keys = Object.keys(session.players).sort((a, b) => Number(a) - Number(b));
+    keys.forEach((seat) => {
+      const p = session.players[seat];
+      const div = document.createElement("div");
+      div.className = "player-entry";
+      div.innerHTML = `<span class="player-name">Seat ${seat}: ${p.name || "Player"}</span>` +
+        (p.description ? `<span class="player-desc"> - ${p.description}</span>` : "");
+      els.playerInfoList.appendChild(div);
+    });
+  }
+
+  // ---- Hand Loading ----
+
+  function loadHand(idx) {
+    if (idx < 0 || idx >= session.hands.length) return;
+
+    clearAllCallouts();
+    playback.currentHandIndex = idx;
+    playback.mode = "script";
+    playback.branchPoint = null;
+
+    const hand = session.hands[idx];
+
+    // Flatten action sequence
+    playback.flatActions = [];
+    playback.streetBoundaries = {};
+    let stepIdx = 0;
+
+    (hand.action_sequence || []).forEach((streetBlock) => {
+      const street = streetBlock.street;
+      playback.streetBoundaries[street] = stepIdx;
+      (streetBlock.actions || []).forEach((action) => {
+        playback.flatActions.push({
+          ...action,
+          street,
+          _stepIndex: stepIdx
+        });
+        stepIdx += 1;
+      });
+    });
+
+    playback.totalSteps = playback.flatActions.length;
+    playback.currentStepIndex = -1; // before any action applied
+
+    // Initialize engine state
+    const heroSeat = (hand.hero_seat || 1) - 1; // convert 1-based to 0-based
+    const buttonSeat = (hand.button_seat || 1) - 1;
+
+    // Build stacks object (convert 1-based keys to 0-based)
+    const stacks = {};
+    if (hand.stacks) {
+      Object.entries(hand.stacks).forEach(([k, v]) => {
+        stacks[Number(k) - 1] = v;
+      });
+    }
+
+    // Build player names (convert 1-based keys to 0-based)
+    const playerNames = {};
+    for (let s = 0; s < SEAT_COUNT; s += 1) {
+      const sessionPlayer = session.players[s + 1] || session.players[s];
+      if (sessionPlayer) {
+        playerNames[s] = { name: sessionPlayer.name || `Seat ${s + 1}`, description: sessionPlayer.description || "" };
+      }
+    }
+
+    const init = PE.initializeHand({
+      seatCount: SEAT_COUNT,
+      buttonSeat,
+      heroSeat,
+      stacks,
+      smallBlind: (hand.blinds || session.blinds).small,
+      bigBlind: (hand.blinds || session.blinds).big,
+      playerNames,
+      defaultStack: 1000,
+      handNumber: hand.hand_id || idx + 1
+    });
+
+    playback.players = init.players;
+    playback.tableState = init.tableState;
+    playback.board = [];
+    playback.heroCards = hand.hero_cards || [];
+    playback.knownVillainCards = {};
+    if (hand.known_villain_cards) {
+      Object.entries(hand.known_villain_cards).forEach(([k, v]) => {
+        playback.knownVillainCards[Number(k) - 1] = v;
+      });
+    }
+    playback.currentStreet = "preflop";
+
+    // Capture preflop snapshot
+    PE.captureStreetSnapshot("preflop", [], playback.players, playback.tableState);
+
+    renderHandList();
+    render();
+  }
+
+  // ---- Script Playback ----
+
+  function nextStep() {
+    if (playback.mode !== "script") return;
+    if (playback.currentStepIndex >= playback.totalSteps - 1) {
+      // Hand is done
+      playback.currentStreet = "showdown";
+      playback.tableState.actionSeat = -1;
+      render();
+      return;
+    }
+
+    const nextIdx = playback.currentStepIndex + 1;
+    const step = playback.flatActions[nextIdx];
+
+    // Check if we're entering a new street
+    const newStreet = step.street;
+    if (newStreet !== playback.currentStreet && newStreet !== "preflop") {
+      transitionToStreet(newStreet);
+    }
+
+    // Apply the action
+    const seatIdx = (step.seat || 1) - 1; // convert 1-based to 0-based
+    const action = PE.normalizeActionName(step.action);
+    const amount = step.amount || 0;
+
+    // Make sure this seat is the acting seat
+    playback.tableState.actionSeat = seatIdx;
+
+    const result = PE.applyPlayerAction(
+      seatIdx, action, amount,
+      playback.players, playback.tableState, SEAT_COUNT,
+      (session.hands[playback.currentHandIndex].blinds || session.blinds).big
+    );
+
+    if (result.success) {
+      showActionCallout(seatIdx, action, result.targetStreetCommit || amount);
+    }
+
+    playback.currentStepIndex = nextIdx;
+    render();
+  }
+
+  function prevStep() {
+    if (playback.mode !== "script") return;
+    if (playback.currentStepIndex < 0) return;
+
+    // Rewind by replaying from hand start to targetStep - 1
+    const targetStep = playback.currentStepIndex - 1;
+    replayToStep(targetStep);
+    render();
+  }
+
+  function replayToStep(targetStep) {
+    // Reload the hand fresh
+    const hand = session.hands[playback.currentHandIndex];
+    const heroSeat = (hand.hero_seat || 1) - 1;
+    const buttonSeat = (hand.button_seat || 1) - 1;
+
+    const stacks = {};
+    if (hand.stacks) {
+      Object.entries(hand.stacks).forEach(([k, v]) => {
+        stacks[Number(k) - 1] = v;
+      });
+    }
+
+    const playerNames = {};
+    for (let s = 0; s < SEAT_COUNT; s += 1) {
+      const sp = session.players[s + 1] || session.players[s];
+      if (sp) playerNames[s] = { name: sp.name, description: sp.description || "" };
+    }
+
+    const init = PE.initializeHand({
+      seatCount: SEAT_COUNT,
+      buttonSeat, heroSeat, stacks,
+      smallBlind: (hand.blinds || session.blinds).small,
+      bigBlind: (hand.blinds || session.blinds).big,
+      playerNames, defaultStack: 1000,
+      handNumber: hand.hand_id || playback.currentHandIndex + 1
+    });
+
+    playback.players = init.players;
+    playback.tableState = init.tableState;
+    playback.board = [];
+    playback.currentStreet = "preflop";
+
+    clearAllCallouts();
+    PE.captureStreetSnapshot("preflop", [], playback.players, playback.tableState);
+
+    // Replay actions up to targetStep
+    const bb = (hand.blinds || session.blinds).big;
+    for (let i = 0; i <= targetStep && i < playback.flatActions.length; i += 1) {
+      const step = playback.flatActions[i];
+      const newStreet = step.street;
+      if (newStreet !== playback.currentStreet && newStreet !== "preflop") {
+        transitionToStreet(newStreet);
+      }
+
+      const seatIdx = (step.seat || 1) - 1;
+      playback.tableState.actionSeat = seatIdx;
+      PE.applyPlayerAction(seatIdx, PE.normalizeActionName(step.action), step.amount || 0,
+        playback.players, playback.tableState, SEAT_COUNT, bb);
+    }
+
+    playback.currentStepIndex = targetStep;
+
+    // Show last action callout
+    if (targetStep >= 0 && targetStep < playback.flatActions.length) {
+      const lastStep = playback.flatActions[targetStep];
+      showActionCallout((lastStep.seat || 1) - 1, PE.normalizeActionName(lastStep.action), lastStep.amount || 0);
+    }
+  }
+
+  function transitionToStreet(street) {
+    const hand = session.hands[playback.currentHandIndex];
+    const board = hand.board || {};
+    const bb = (hand.blinds || session.blinds).big;
+
+    if (street === "flop" && board.flop) {
+      playback.board = board.flop.slice();
+      PE.beginStreetRound("flop", playback.players, playback.tableState, SEAT_COUNT, bb);
+      PE.captureStreetSnapshot("flop", [], playback.players, playback.tableState);
+    } else if (street === "turn") {
+      const turnCard = board.turn;
+      if (turnCard) playback.board = [...(board.flop || playback.board.slice(0, 3)), turnCard];
+      PE.beginStreetRound("turn", playback.players, playback.tableState, SEAT_COUNT, bb);
+      PE.captureStreetSnapshot("turn", playback.board.slice(0, 3), playback.players, playback.tableState);
+    } else if (street === "river") {
+      const riverCard = board.river;
+      if (riverCard) playback.board = [...playback.board.slice(0, 4), riverCard];
+      PE.beginStreetRound("river", playback.players, playback.tableState, SEAT_COUNT, bb);
+      PE.captureStreetSnapshot("river", playback.board.slice(0, 4), playback.players, playback.tableState);
+    }
+    playback.currentStreet = street;
+  }
+
+  // ---- Branch Mode ----
+
+  function enterBranchMode() {
+    if (playback.mode === "idle") return;
+    playback.branchPoint = {
+      handIndex: playback.currentHandIndex,
+      stepIndex: playback.currentStepIndex,
+      players: PE.clonePlainObject(playback.players),
+      tableState: PE.clonePlainObject(playback.tableState),
+      board: playback.board.slice(),
+      street: playback.currentStreet
+    };
+    playback.mode = "branch";
+    render();
+  }
+
+  function backToScript() {
+    if (!playback.branchPoint) return;
+    playback.players = PE.clonePlainObject(playback.branchPoint.players);
+    playback.tableState = PE.clonePlainObject(playback.branchPoint.tableState);
+    playback.board = playback.branchPoint.board.slice();
+    playback.currentStreet = playback.branchPoint.street;
+    playback.currentStepIndex = playback.branchPoint.stepIndex;
+    playback.branchPoint = null;
+    playback.mode = "script";
+    clearAllCallouts();
+    render();
+  }
+
+  function applyBranchAction(action, sizeChips) {
+    if (playback.mode !== "branch") return;
+    if (!playback.tableState || playback.tableState.actionSeat < 0) return;
+
+    const seat = playback.tableState.actionSeat;
+    const bb = session.blinds.big;
+    const result = PE.applyPlayerAction(seat, action, sizeChips || 0,
+      playback.players, playback.tableState, SEAT_COUNT, bb);
+
+    if (result.success) {
+      showActionCallout(seat, action, result.targetStreetCommit || sizeChips || 0);
+
+      // Check if betting round is complete
+      if (PE.isHandWonByFold(playback.players)) {
+        playback.currentStreet = "showdown";
+        playback.tableState.actionSeat = -1;
+      } else if (PE.isBettingRoundComplete(playback.players, playback.tableState)) {
+        // Advance street
+        const streets = ["preflop", "flop", "turn", "river"];
+        const curIdx = streets.indexOf(playback.currentStreet);
+        if (curIdx < streets.length - 1) {
+          const nextStreet = streets[curIdx + 1];
+          transitionToStreet(nextStreet);
+        } else {
+          playback.currentStreet = "showdown";
+          playback.tableState.actionSeat = -1;
+        }
+      }
+    }
+
+    render();
+  }
+
+  // ---- Seat Click Handler ----
+
+  function onSeatClicked(seatIdx) {
+    if (playback.mode === "branch") {
+      // In branch mode, clicking a seat selects it as acting
+      const player = PE.getPlayerBySeat(playback.players, seatIdx);
+      if (player && player.status === "active") {
+        playback.tableState.actionSeat = seatIdx;
+        render();
+      }
+    } else if (playback.mode === "script") {
+      // In script mode, clicking a seat enters branch mode with that seat acting
+      enterBranchMode();
+      const player = PE.getPlayerBySeat(playback.players, seatIdx);
+      if (player && player.status === "active") {
+        playback.tableState.actionSeat = seatIdx;
+        render();
+      }
+    }
+  }
+
+  // ---- Demo Session ----
+
+  function buildDemoSession() {
+    return {
+      version: 2,
+      app: "session-replayer",
+      session_name: "Demo: Tuesday $2/$5 Session",
+      blinds: { small: 2, big: 5 },
+      players: {
+        "1": { name: "Hero", description: "Our seat", is_hero: true },
+        "2": { name: "Dave", description: "Tight reg, sunglasses" },
+        "3": { name: "Fish", description: "Loose passive, calls everything" },
+        "4": { name: "Seat 4", description: "" },
+        "5": { name: "Nit", description: "Only plays premiums" },
+        "6": { name: "LAG", description: "Loose aggressive, 3-bets wide" },
+        "7": { name: "OMC", description: "Old man coffee, very tight" },
+        "8": { name: "Rec", description: "Recreational, having fun" },
+        "9": { name: "Pro", description: "Solid winning player" }
+      },
+      hands: [
+        {
+          hand_id: 1,
+          hand_label: "Hand 1",
+          status: "confirmed",
+          hero_seat: 1,
+          button_seat: 9,
+          blinds: { small: 2, big: 5 },
+          stacks: { 1: 500, 2: 650, 3: 300, 4: 500, 5: 500, 6: 800, 7: 500, 8: 400, 9: 1000 },
+          hero_cards: ["Ah", "Kd"],
+          known_villain_cards: { "3": ["9s", "7s"] },
+          board: { flop: ["Ks", "9h", "4c"], turn: "2d", river: "Jh" },
+          action_sequence: [
+            {
+              street: "preflop",
+              actions: [
+                { seat: 3, position: "UTG", action: "fold" },
+                { seat: 4, position: "UTG+1", action: "fold" },
+                { seat: 5, position: "UTG+2", action: "fold" },
+                { seat: 6, position: "LJ", action: "fold" },
+                { seat: 7, position: "HJ", action: "fold" },
+                { seat: 8, position: "CO", action: "raise", amount: 15 },
+                { seat: 9, position: "BTN", action: "fold" },
+                { seat: 1, position: "SB", action: "raise", amount: 50 },
+                { seat: 2, position: "BB", action: "fold" },
+                { seat: 8, position: "CO", action: "call", amount: 50 }
+              ]
+            },
+            {
+              street: "flop",
+              actions: [
+                { seat: 1, position: "SB", action: "bet", amount: 45 },
+                { seat: 8, position: "CO", action: "call", amount: 45 }
+              ]
+            },
+            {
+              street: "turn",
+              actions: [
+                { seat: 1, position: "SB", action: "bet", amount: 120 },
+                { seat: 8, position: "CO", action: "fold" }
+              ]
+            }
+          ],
+          result: { winner_seat: 1, pot: 330, showdown: false, notes: "Hero takes it on the turn" },
+          coach_flags: { starred: true, tag: "3-bet pot OOP" }
+        },
+        {
+          hand_id: 2,
+          hand_label: "Hand 2",
+          status: "confirmed",
+          hero_seat: 1,
+          button_seat: 1,
+          blinds: { small: 2, big: 5 },
+          stacks: { 1: 830, 2: 645, 3: 300, 4: 500, 5: 500, 6: 800, 7: 500, 8: 250, 9: 1000 },
+          hero_cards: ["Qh", "Jh"],
+          known_villain_cards: {},
+          board: { flop: ["Th", "8h", "3d"], turn: "2h", river: "Ac" },
+          action_sequence: [
+            {
+              street: "preflop",
+              actions: [
+                { seat: 3, position: "UTG", action: "fold" },
+                { seat: 4, position: "UTG+1", action: "fold" },
+                { seat: 5, position: "UTG+2", action: "fold" },
+                { seat: 6, position: "LJ", action: "call", amount: 5 },
+                { seat: 7, position: "HJ", action: "fold" },
+                { seat: 8, position: "CO", action: "fold" },
+                { seat: 1, position: "BTN", action: "raise", amount: 20 },
+                { seat: 9, position: "SB", action: "fold" },
+                { seat: 2, position: "BB", action: "fold" },
+                { seat: 6, position: "LJ", action: "call", amount: 20 }
+              ]
+            },
+            {
+              street: "flop",
+              actions: [
+                { seat: 6, position: "LJ", action: "check" },
+                { seat: 1, position: "BTN", action: "bet", amount: 30 },
+                { seat: 6, position: "LJ", action: "call", amount: 30 }
+              ]
+            },
+            {
+              street: "turn",
+              actions: [
+                { seat: 6, position: "LJ", action: "check" },
+                { seat: 1, position: "BTN", action: "bet", amount: 70 },
+                { seat: 6, position: "LJ", action: "fold" }
+              ]
+            }
+          ],
+          result: { winner_seat: 1, pot: 170, showdown: false, notes: "Flush draw got there, villain folds turn" },
+          coach_flags: { starred: false }
+        },
+        {
+          hand_id: 3,
+          hand_label: "Hand 3",
+          status: "confirmed",
+          hero_seat: 1,
+          button_seat: 2,
+          blinds: { small: 2, big: 5 },
+          stacks: { 1: 1000, 2: 645, 3: 300, 4: 500, 5: 500, 6: 750, 7: 500, 8: 250, 9: 1000 },
+          hero_cards: ["7d", "2c"],
+          known_villain_cards: {},
+          board: {},
+          action_sequence: [
+            {
+              street: "preflop",
+              actions: [
+                { seat: 4, position: "UTG", action: "raise", amount: 15 },
+                { seat: 5, position: "UTG+1", action: "fold" },
+                { seat: 6, position: "UTG+2", action: "fold" },
+                { seat: 7, position: "LJ", action: "fold" },
+                { seat: 8, position: "HJ", action: "fold" },
+                { seat: 1, position: "CO", action: "fold" }
+              ]
+            }
+          ],
+          result: { winner_seat: 4, pot: 22, showdown: false, notes: "Hero folds garbage preflop" },
+          coach_flags: { starred: false }
+        }
+      ]
+    };
+  }
+
+  // ---- Event Handlers ----
+
+  function setupEvents() {
+    // Upload
+    els.loadDemoBtn.addEventListener("click", () => {
+      loadSession(buildDemoSession());
+    });
+
+    els.uploadZone.addEventListener("click", () => els.fileInput.click());
+    els.uploadZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      els.uploadZone.classList.add("dragover");
+    });
+    els.uploadZone.addEventListener("dragleave", () => {
+      els.uploadZone.classList.remove("dragover");
+    });
+    els.uploadZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      els.uploadZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    els.fileInput.addEventListener("change", () => {
+      if (els.fileInput.files.length) handleFile(els.fileInput.files[0]);
+    });
+
+    // Top bar
+    els.toggleSidebarBtn.addEventListener("click", () => {
+      els.sidebar.classList.toggle("collapsed");
+    });
+    els.loadNewBtn.addEventListener("click", () => {
+      showScreen("upload");
+      playback.mode = "idle";
+    });
+
+    // Nav buttons
+    els.btnNextStep.addEventListener("click", nextStep);
+    els.btnPrevStep.addEventListener("click", prevStep);
+    els.btnBackToScript.addEventListener("click", backToScript);
+    els.btnNextHand.addEventListener("click", () => loadHand(playback.currentHandIndex + 1));
+    els.btnPrevHand.addEventListener("click", () => loadHand(playback.currentHandIndex - 1));
+
+    // Action buttons (branch mode)
+    els.btnFold.addEventListener("click", () => applyBranchAction("fold"));
+    els.btnCheck.addEventListener("click", () => applyBranchAction("check"));
+    els.btnCall.addEventListener("click", () => applyBranchAction("call"));
+    els.btnBet.addEventListener("click", () => applyBranchAction("bet", Number(els.sizeInput.value)));
+    els.btnRaise.addEventListener("click", () => applyBranchAction("raise", Number(els.sizeInput.value)));
+    els.btnAllIn.addEventListener("click", () => applyBranchAction("all-in"));
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT") return;
+
+      if (e.key === "ArrowRight" || e.key === " ") {
+        e.preventDefault();
+        if (playback.mode === "script") nextStep();
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (playback.mode === "script") prevStep();
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (playback.currentHandIndex < session.hands.length - 1) loadHand(playback.currentHandIndex + 1);
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (playback.currentHandIndex > 0) loadHand(playback.currentHandIndex - 1);
+      }
+      if (e.key === "Escape" && playback.mode === "branch") {
+        backToScript();
+      }
+    });
+  }
+
+  function handleFile(file) {
+    const name = file.name.toLowerCase();
+    const reader = new FileReader();
+
+    if (name.endsWith(".json")) {
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          loadSession(data);
+        } catch (err) {
+          window.alert("Failed to parse JSON: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    } else if (name.endsWith(".txt")) {
+      reader.onload = () => {
+        // For now, show the raw text — full LLM parsing in Phase 4
+        window.alert("Text file loaded. LLM parsing coming in a future update. For now, use JSON format or the demo.");
+      };
+      reader.readAsText(file);
+    } else {
+      window.alert("Supported formats: .json, .txt (coming soon: .docx)");
+    }
+  }
+
+  // ---- Init ----
+
+  createSeatElements();
+  setupEvents();
+  showScreen("upload");
+
+})();
+</script>
+</body>
+</html>
