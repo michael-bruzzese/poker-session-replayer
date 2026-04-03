@@ -306,8 +306,24 @@
 
   .seat-position { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .seat-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
-  .seat-stack { font-size: 20px; font-weight: 800; color: #7bed7b; text-shadow: 0 1px 3px rgba(0,0,0,0.4); cursor: pointer; }
+  .seat-stack { font-size: 28px; font-weight: 900; color: #7bed7b; text-shadow: 0 2px 4px rgba(0,0,0,0.5); cursor: pointer; }
   .seat-stack:hover { text-decoration: underline; }
+  .seat-stack-delta {
+    font-size: 18px;
+    font-weight: 800;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -22px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 1.2s ease-out;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .seat-stack-delta.loss { color: #ff6666; }
+  .seat-stack-delta.gain { color: #66ff66; }
+  .seat-stack-delta.show { opacity: 1; transition: none; }
   .seat-stack-edit {
     width: 70px;
     font-size: 16px;
@@ -1234,7 +1250,8 @@
     heroCards: [],
     knownVillainCards: {},
     currentStreet: "preflop",
-    actionCallouts: {}            // { seat: { action, amount, timer } }
+    actionCallouts: {},            // { seat: { action, amount, timer } }
+    previousStacks: null           // { seat: stack } — for delta display, null = suppress deltas
   };
 
   // ---- DOM Refs ----
@@ -1361,6 +1378,7 @@
           <div class="seat-position" data-seat-position></div>
           <div class="seat-name" data-seat-name>Seat ${i + 1}</div>
           <div class="seat-stack" data-seat-stack>--</div>
+          <div class="seat-stack-delta" data-seat-delta></div>
           <div class="seat-chipstack" data-seat-chipstack></div>
           <div class="seat-cards" data-seat-cards></div>
         </div>
@@ -1389,6 +1407,26 @@
       el.querySelector("[data-seat-name]").textContent = player.name || `Seat ${i + 1}`;
       el.querySelector("[data-seat-stack]").textContent = player.stack;
       renderSeatChipStack(el.querySelector("[data-seat-chipstack]"), player.stack);
+
+      // Stack delta display
+      const deltaEl = el.querySelector("[data-seat-delta]");
+      if (deltaEl && playback.previousStacks && playback.previousStacks[i] !== undefined) {
+        const diff = player.stack - playback.previousStacks[i];
+        if (diff !== 0) {
+          deltaEl.textContent = diff > 0 ? `+${diff}` : `${diff}`;
+          deltaEl.className = `seat-stack-delta show ${diff > 0 ? "gain" : "loss"}`;
+          // Trigger fade after a frame
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              deltaEl.classList.remove("show");
+            });
+          });
+        } else {
+          deltaEl.className = "seat-stack-delta";
+        }
+      } else if (deltaEl) {
+        deltaEl.className = "seat-stack-delta";
+      }
 
       el.classList.toggle("acting", playback.tableState && playback.tableState.actionSeat === i);
       el.classList.toggle("hero", playback.tableState && playback.tableState.heroSeat === i);
@@ -2069,11 +2107,27 @@
     });
   }
 
+  // ---- Stack Delta Tracking ----
+
+  function captureCurrentStacks() {
+    const stacks = {};
+    for (let i = 0; i < SEAT_COUNT; i++) {
+      const p = PE.getPlayerBySeat(playback.players, i);
+      if (p) stacks[i] = p.stack;
+    }
+    playback.previousStacks = stacks;
+  }
+
+  function suppressStackDeltas() {
+    playback.previousStacks = null;
+  }
+
   // ---- Hand Loading ----
 
   function loadHand(idx) {
     if (idx < 0 || idx >= session.hands.length) return;
 
+    suppressStackDeltas();
     clearAllCallouts();
     playback.currentHandIndex = idx;
     playback.mode = "script";
@@ -2247,6 +2301,9 @@
   }
 
   function applyStepAction(step, nextIdx) {
+    // Capture stacks before this action for delta display
+    captureCurrentStacks();
+
     const seatIdx = (step.seat || 1) - 1;
     const action = PE.normalizeActionName(step.action);
     const amount = step.amount || 0;
@@ -2367,6 +2424,7 @@
   }
 
   function replayToStep(targetStep) {
+    suppressStackDeltas();
     // Reload the hand fresh
     const hand = session.hands[playback.currentHandIndex];
     const heroSeat = (hand.hero_seat || 1) - 1;
@@ -2563,6 +2621,7 @@
     if (playback.mode !== "branch") return;
     if (!playback.tableState || playback.tableState.actionSeat < 0) return;
 
+    captureCurrentStacks();
     const seat = playback.tableState.actionSeat;
     const bb = session.blinds.big;
     const result = PE.applyPlayerAction(seat, action, sizeChips || 0,
