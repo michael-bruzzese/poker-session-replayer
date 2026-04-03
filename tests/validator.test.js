@@ -463,6 +463,145 @@ describe("Action Validation — Invalid Action Types", () => {
 });
 
 // ============================================================
+// Action Validation — Turn Order (Full Sequence)
+// ============================================================
+
+describe("Action Validation — Turn Order", () => {
+  // 9-max, button seat 9 → SB=1, BB=2, UTG=3
+  const baseHand = {
+    hand_id: 99, hero_seat: 1, button_seat: 9,
+    hero_cards: ["Ah", "Kd"],
+    blinds: { small: 2, big: 5 },
+    board: {}
+  };
+
+  it("catches BB acting before UTG preflop", () => {
+    const errors = HoldemValidator.validateHand({
+      ...baseHand,
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 2, position: "BB", action: "fold" },   // BB acts first — wrong!
+          { seat: 3, position: "UTG", action: "raise", amount: 15 },
+          { seat: 1, position: "SB", action: "fold" }
+        ]
+      }]
+    });
+    expect(errors.some(e => e.field === "preflop.action_order")).toBe(true);
+  });
+
+  it("catches SB acting before UTG preflop", () => {
+    const errors = HoldemValidator.validateHand({
+      ...baseHand,
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 1, position: "SB", action: "fold" },   // SB acts first — wrong!
+          { seat: 3, position: "UTG", action: "raise", amount: 15 },
+          { seat: 2, position: "BB", action: "call", amount: 15 }
+        ]
+      }]
+    });
+    expect(errors.some(e => e.field === "preflop.action_order")).toBe(true);
+  });
+
+  it("accepts correct preflop order: UTG, CO, SB, BB", () => {
+    const errors = HoldemValidator.validateHand({
+      ...baseHand,
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 3, position: "UTG", action: "fold" },
+          { seat: 4, position: "UTG+1", action: "fold" },
+          { seat: 5, position: "UTG+2", action: "fold" },
+          { seat: 6, position: "LJ", action: "fold" },
+          { seat: 7, position: "HJ", action: "fold" },
+          { seat: 8, position: "CO", action: "raise", amount: 15 },
+          { seat: 9, position: "BTN", action: "fold" },
+          { seat: 1, position: "SB", action: "call", amount: 15 },
+          { seat: 2, position: "BB", action: "fold" }
+        ]
+      }]
+    });
+    const orderErrors = errors.filter(e => e.field === "preflop.action_order");
+    expect(orderErrors).toEqual([]);
+  });
+
+  it("catches BTN acting before SB on the flop", () => {
+    const errors = HoldemValidator.validateHand({
+      ...baseHand,
+      board: { flop: ["Qs", "Jd", "4c"] },
+      action_sequence: [
+        {
+          street: "preflop",
+          actions: [
+            { seat: 3, position: "UTG", action: "fold" },
+            { seat: 8, position: "CO", action: "fold" },
+            { seat: 9, position: "BTN", action: "raise", amount: 15 },
+            { seat: 1, position: "SB", action: "call", amount: 15 },
+            { seat: 2, position: "BB", action: "fold" }
+          ]
+        },
+        {
+          street: "flop",
+          actions: [
+            { seat: 9, position: "BTN", action: "bet", amount: 20 }, // BTN acts first — wrong!
+            { seat: 1, position: "SB", action: "call", amount: 20 }
+          ]
+        }
+      ]
+    });
+    expect(errors.some(e => e.field === "flop.action_order")).toBe(true);
+  });
+
+  it("accepts correct postflop order: SB then BTN", () => {
+    const errors = HoldemValidator.validateHand({
+      ...baseHand,
+      board: { flop: ["Qs", "Jd", "4c"] },
+      action_sequence: [
+        {
+          street: "preflop",
+          actions: [
+            { seat: 3, position: "UTG", action: "fold" },
+            { seat: 9, position: "BTN", action: "raise", amount: 15 },
+            { seat: 1, position: "SB", action: "call", amount: 15 },
+            { seat: 2, position: "BB", action: "fold" }
+          ]
+        },
+        {
+          street: "flop",
+          actions: [
+            { seat: 1, position: "SB", action: "check" },
+            { seat: 9, position: "BTN", action: "bet", amount: 20 },
+            { seat: 1, position: "SB", action: "call", amount: 20 }
+          ]
+        }
+      ]
+    });
+    const orderErrors = errors.filter(e => e.field === "flop.action_order");
+    expect(orderErrors).toEqual([]);
+  });
+
+  it("catches mid-position acting out of order preflop", () => {
+    // CO acts before UTG+1 — wrong in 9-max
+    const errors = HoldemValidator.validateHand({
+      ...baseHand,
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 3, position: "UTG", action: "fold" },
+          { seat: 8, position: "CO", action: "raise", amount: 15 },  // skipped seats 4-7
+          { seat: 4, position: "UTG+1", action: "fold" },
+          { seat: 1, position: "SB", action: "fold" },
+          { seat: 2, position: "BB", action: "fold" }
+        ]
+      }]
+    });
+    expect(errors.some(e => e.field === "preflop.action_order")).toBe(true);
+  });
+});
+
+// ============================================================
 // Session Validation
 // ============================================================
 
@@ -535,6 +674,295 @@ describe("Blinds Validation", () => {
       action_sequence: []
     });
     expect(errors.some(e => e.field === "blinds")).toBe(true);
+  });
+});
+
+// ============================================================
+// Hand Evaluation
+// ============================================================
+
+describe("Hand Evaluation", () => {
+  const board = ["Ac", "9d", "4s", "7h", "3c"];
+
+  it("evaluates pair of aces vs pair of kings correctly", () => {
+    const aces = HoldemValidator.evaluateHoldemHand(["As", "Qh"], board);
+    const kings = HoldemValidator.evaluateHoldemHand(["Kd", "Ks"], board);
+    expect(HoldemValidator.compareHandRanks(aces, kings)).toBeGreaterThan(0);
+  });
+
+  it("evaluates a set vs top pair", () => {
+    const set = HoldemValidator.evaluateHoldemHand(["9s", "9c"], ["9h", "Qc", "4d", "2s", "Jc"]);
+    const topPair = HoldemValidator.evaluateHoldemHand(["Ah", "Qd"], ["9h", "Qc", "4d", "2s", "Jc"]);
+    expect(HoldemValidator.compareHandRanks(set, topPair)).toBeGreaterThan(0);
+  });
+
+  it("evaluates a flush vs straight", () => {
+    const flush = HoldemValidator.evaluateHoldemHand(["Th", "9h"], ["Kh", "6h", "2h", "4s", "3d"]);
+    const straight = HoldemValidator.evaluateHoldemHand(["5d", "4c"], ["Kh", "6h", "2h", "3s", "7d"]);
+    expect(flush.category).toBe(5); // flush
+    expect(straight.category).toBe(4); // straight
+    expect(HoldemValidator.compareHandRanks(flush, straight)).toBeGreaterThan(0);
+  });
+
+  it("evaluates two pair vs one pair", () => {
+    const twoPair = HoldemValidator.evaluateHoldemHand(["Kd", "9c"], ["Kh", "9s", "4d", "2c", "7h"]);
+    const onePair = HoldemValidator.evaluateHoldemHand(["Kc", "Jd"], ["Kh", "9s", "4d", "2c", "7h"]);
+    expect(HoldemValidator.compareHandRanks(twoPair, onePair)).toBeGreaterThan(0);
+  });
+
+  it("evaluates full house vs flush", () => {
+    const fullHouse = HoldemValidator.evaluateHoldemHand(["Kd", "Kc"], ["Kh", "9s", "9d", "2c", "7h"]);
+    const flush = HoldemValidator.evaluateHoldemHand(["Th", "8h"], ["Kh", "9h", "2h", "4c", "7d"]);
+    expect(HoldemValidator.compareHandRanks(fullHouse, flush)).toBeGreaterThan(0);
+  });
+
+  it("handles the wheel (A-2-3-4-5 straight)", () => {
+    const wheel = HoldemValidator.evaluateHoldemHand(["Ad", "2c"], ["3h", "4s", "5d", "Kc", "9h"]);
+    expect(wheel.category).toBe(4); // straight
+    expect(wheel.kickers[0]).toBe(5); // 5-high
+  });
+
+  it("Q-high beats T-high", () => {
+    const qHigh = HoldemValidator.evaluateHoldemHand(["Qc", "Jd"], ["Kh", "6h", "2c", "4s", "3d"]);
+    const tHigh = HoldemValidator.evaluateHoldemHand(["Th", "9h"], ["Kh", "6h", "2c", "4s", "3d"]);
+    expect(HoldemValidator.compareHandRanks(qHigh, tHigh)).toBeGreaterThan(0);
+  });
+
+  it("describes hand ranks readably", () => {
+    const pairOfAces = HoldemValidator.evaluateHoldemHand(["As", "Qh"], board);
+    const desc = HoldemValidator.describeHandRank(pairOfAces);
+    expect(desc).toContain("pair");
+    expect(desc).toContain("ace");
+  });
+});
+
+// ============================================================
+// Showdown Winner Validation
+// ============================================================
+
+describe("Showdown Winner Validation", () => {
+  it("catches wrong winner when hero's aces beat villain's kings", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 1, hero_seat: 1, button_seat: 8,
+      hero_cards: ["As", "Qh"],
+      known_villain_cards: { "4": ["Kd", "Ks"] },
+      board: { flop: ["Ac", "9d", "4s"], turn: "7h", river: "3c" },
+      action_sequence: [
+        { street: "preflop", actions: [
+          { seat: 4, action: "raise", amount: 15 },
+          { seat: 1, action: "call", amount: 15 }
+        ]},
+        { street: "flop", actions: [
+          { seat: 4, action: "bet", amount: 20 },
+          { seat: 1, action: "call", amount: 20 }
+        ]},
+        { street: "turn", actions: [
+          { seat: 4, action: "bet", amount: 45 },
+          { seat: 1, action: "call", amount: 45 }
+        ]},
+        { street: "river", actions: [
+          { seat: 4, action: "bet", amount: 100 },
+          { seat: 1, action: "call", amount: 100 }
+        ]}
+      ],
+      result: { winner_seat: 4, pot: 367, showdown: true }
+    });
+    expect(errors.some(e => e.field === "result.winner_seat")).toBe(true);
+  });
+
+  it("accepts correct showdown winner", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 6, hero_seat: 1, button_seat: 4,
+      hero_cards: ["9s", "9c"],
+      known_villain_cards: { "6": ["Ah", "Qd"] },
+      board: { flop: ["9h", "Qc", "4d"], turn: "2s", river: "Jc" },
+      action_sequence: [
+        { street: "preflop", actions: [
+          { seat: 6, action: "raise", amount: 15 },
+          { seat: 1, action: "call", amount: 15 }
+        ]},
+        { street: "flop", actions: [
+          { seat: 1, action: "check" },
+          { seat: 6, action: "bet", amount: 20 },
+          { seat: 1, action: "call", amount: 20 }
+        ]},
+        { street: "turn", actions: [
+          { seat: 1, action: "check" },
+          { seat: 6, action: "bet", amount: 40 },
+          { seat: 1, action: "call", amount: 40 }
+        ]},
+        { street: "river", actions: [
+          { seat: 1, action: "check" },
+          { seat: 6, action: "bet", amount: 95 },
+          { seat: 1, action: "call", amount: 95 }
+        ]}
+      ],
+      result: { winner_seat: 1, pot: 347, showdown: true }
+    });
+    expect(errors.filter(e => e.field === "result.winner_seat")).toEqual([]);
+  });
+
+  it("does not validate when villain cards are unknown", () => {
+    const errors = HoldemValidator.validateHand({
+      hand_id: 1, hero_seat: 1, button_seat: 8,
+      hero_cards: ["As", "Qh"],
+      known_villain_cards: {},
+      board: { flop: ["Ac", "9d", "4s"], turn: "7h", river: "3c" },
+      action_sequence: [],
+      result: { winner_seat: 4, pot: 200, showdown: true }
+    });
+    // Can't validate — only hero cards known
+    expect(errors.filter(e => e.field === "result.winner_seat")).toEqual([]);
+  });
+});
+
+// ============================================================
+// Implicit Action Inference
+// ============================================================
+
+describe("Implicit Action Inference", () => {
+  it("infers checks when flop action starts with a bet and earlier players are active", () => {
+    // Button=9, SB=1, BB=2. Preflop: seat 4 raises, seat 1 calls, rest fold.
+    // Flop: only seat 4's bet is recorded. Seat 1 should have a check inferred.
+    const hand = {
+      hand_id: 1, hero_seat: 1, button_seat: 9,
+      blinds: { small: 2, big: 5 },
+      board: { flop: ["Qs", "Jd", "4c"] },
+      action_sequence: [
+        {
+          street: "preflop",
+          actions: [
+            { seat: 3, position: "UTG", action: "fold" },
+            { seat: 4, position: "UTG+1", action: "raise", amount: 15 },
+            { seat: 1, position: "CO", action: "call", amount: 15 },
+            { seat: 9, position: "SB", action: "fold" },
+            { seat: 2, position: "BB", action: "fold" }
+          ]
+        },
+        {
+          street: "flop",
+          actions: [
+            { seat: 4, position: "UTG+1", action: "bet", amount: 20 },
+            { seat: 1, position: "CO", action: "call", amount: 20 }
+          ]
+        }
+      ]
+    };
+    // Postflop order: SB(1)=folded, BB(2)=folded, UTG(3)=folded, UTG+1(4), ..., CO(1 is not SB here)
+    // Wait — seat 1 is CO, seat 4 is UTG+1. Postflop, start at SB=1... but SB folded.
+    // Active seats: 4 and 1. Seat 1 comes before seat 4 starting from SB position going clockwise.
+    // Clockwise from SB(seat 1): 1, 2, 3, 4, 5, 6, 7, 8, 9. Active: 1 and 4. So order = [1, 4].
+    // First action is seat 4 betting — seat 1 should have checked first.
+    const inferred = HoldemValidator.inferImpliedActions(hand, 9);
+    expect(inferred.length).toBeGreaterThan(0);
+    expect(inferred[0].seat).toBe(1);
+    expect(inferred[0].action).toBe("check");
+
+    // The flop actions should now start with the inferred check
+    const flopBlock = hand.action_sequence.find(s => s.street === "flop");
+    expect(flopBlock.actions[0].action).toBe("check");
+    expect(flopBlock.actions[0].seat).toBe(1);
+    expect(flopBlock.actions[0]._inferred).toBe(true);
+  });
+
+  it("infers BB option check when limped pot goes to flop", () => {
+    // Button=9, SB=1, BB=2. Everyone folds or limps, no raise. Hand goes to flop.
+    // BB never explicitly acts preflop — should infer a check.
+    const hand = {
+      hand_id: 2, hero_seat: 1, button_seat: 9,
+      blinds: { small: 2, big: 5 },
+      board: { flop: ["Ks", "8d", "3c"] },
+      action_sequence: [
+        {
+          street: "preflop",
+          actions: [
+            { seat: 3, position: "UTG", action: "call", amount: 5 },
+            { seat: 4, position: "UTG+1", action: "fold" },
+            { seat: 5, position: "UTG+2", action: "fold" },
+            { seat: 6, position: "LJ", action: "fold" },
+            { seat: 7, position: "HJ", action: "fold" },
+            { seat: 8, position: "CO", action: "fold" },
+            { seat: 1, position: "BTN", action: "call", amount: 5 },
+            { seat: 9, position: "SB", action: "call", amount: 5 }
+            // BB never acts — option is implied
+          ]
+        },
+        {
+          street: "flop",
+          actions: [
+            { seat: 2, position: "BB", action: "check" },
+            { seat: 3, position: "UTG", action: "bet", amount: 15 }
+          ]
+        }
+      ]
+    };
+    const inferred = HoldemValidator.inferImpliedActions(hand, 9);
+    // BB's preflop check should be inferred
+    expect(inferred.some(i => i.seat === 2 && i.street === "preflop")).toBe(true);
+    const preflopBlock = hand.action_sequence.find(s => s.street === "preflop");
+    const bbAction = preflopBlock.actions.find(a => a.seat === 2);
+    expect(bbAction).toBeDefined();
+    expect(bbAction.action).toBe("check");
+  });
+
+  it("does NOT infer BB check when there was a raise preflop", () => {
+    const hand = {
+      hand_id: 3, hero_seat: 1, button_seat: 9,
+      blinds: { small: 2, big: 5 },
+      board: { flop: ["Ks", "8d", "3c"] },
+      action_sequence: [
+        {
+          street: "preflop",
+          actions: [
+            { seat: 3, position: "UTG", action: "raise", amount: 15 },
+            { seat: 1, position: "BTN", action: "call", amount: 15 },
+            { seat: 9, position: "SB", action: "fold" },
+            { seat: 2, position: "BB", action: "call", amount: 15 }
+          ]
+        },
+        {
+          street: "flop",
+          actions: [
+            { seat: 2, position: "BB", action: "check" },
+            { seat: 3, position: "UTG", action: "bet", amount: 20 }
+          ]
+        }
+      ]
+    };
+    const inferred = HoldemValidator.inferImpliedActions(hand, 9);
+    // BB acted explicitly (called), no BB option inference needed
+    expect(inferred.filter(i => i.seat === 2 && i.street === "preflop")).toEqual([]);
+  });
+
+  it("does not infer checks when flop order is already correct", () => {
+    const hand = {
+      hand_id: 4, hero_seat: 1, button_seat: 9,
+      blinds: { small: 2, big: 5 },
+      board: { flop: ["Qs", "Jd", "4c"] },
+      action_sequence: [
+        {
+          street: "preflop",
+          actions: [
+            { seat: 4, position: "UTG+1", action: "raise", amount: 15 },
+            { seat: 1, position: "CO", action: "call", amount: 15 },
+            { seat: 2, position: "BB", action: "fold" }
+          ]
+        },
+        {
+          street: "flop",
+          actions: [
+            { seat: 1, position: "CO", action: "check" },
+            { seat: 4, position: "UTG+1", action: "bet", amount: 20 }
+          ]
+        }
+      ]
+    };
+    // Seat 1 (CO) comes before seat 4 (UTG+1) postflop? Let's verify.
+    // Button=9, SB=1, BB=2. Postflop order from SB: 1, 2(folded), 3, 4, ...
+    // Active: 1 and 4. Order: [1, 4]. First action is seat 1 check — correct, no inference.
+    const inferred = HoldemValidator.inferImpliedActions(hand, 9);
+    const flopInferred = inferred.filter(i => i.street === "flop");
+    expect(flopInferred).toEqual([]);
   });
 });
 
@@ -1023,7 +1451,7 @@ describe("Engine — Snapshot Capture & Restore", () => {
 // Validator — Preflop/Postflop Action Order
 // ============================================================
 
-describe("Validator — Action Order", () => {
+describe("Validator — Action Order (legacy tests updated)", () => {
   it("flags BB acting first preflop", () => {
     const errors = HoldemValidator.validateHand({
       hand_id: 1, hero_seat: 1, button_seat: 9,
@@ -1038,10 +1466,10 @@ describe("Validator — Action Order", () => {
         ]
       }]
     });
-    expect(errors.some(e => e.message.includes("BB acts first preflop"))).toBe(true);
+    expect(errors.some(e => e.field === "preflop.action_order")).toBe(true);
   });
 
-  it("flags SB acting first preflop", () => {
+  it("flags SB acting before UTG preflop", () => {
     const errors = HoldemValidator.validateHand({
       hand_id: 1, hero_seat: 1, button_seat: 9,
       hero_cards: ["Ah", "Kd"],
@@ -1051,11 +1479,12 @@ describe("Validator — Action Order", () => {
         street: "preflop",
         actions: [
           { seat: 1, position: "SB", action: "fold" },
-          { seat: 2, position: "BB", action: "check" }
+          { seat: 3, position: "UTG", action: "raise", amount: 15 },
+          { seat: 2, position: "BB", action: "fold" }
         ]
       }]
     });
-    expect(errors.some(e => e.message.includes("SB acts first preflop"))).toBe(true);
+    expect(errors.some(e => e.field === "preflop.action_order")).toBe(true);
   });
 
   it("does not flag UTG acting first preflop", () => {
@@ -1073,7 +1502,7 @@ describe("Validator — Action Order", () => {
         ]
       }]
     });
-    expect(errors.filter(e => e.message.includes("acts first preflop"))).toEqual([]);
+    expect(errors.filter(e => e.field && e.field.includes("action_order"))).toEqual([]);
   });
 
   it("flags button acting first postflop", () => {
@@ -1089,6 +1518,92 @@ describe("Validator — Action Order", () => {
         ]
       }]
     });
-    expect(errors.some(e => e.message.includes("Button acts first"))).toBe(true);
+    expect(errors.some(e => e.field === "flop.action_order")).toBe(true);
+  });
+});
+
+// ============================================================
+// Gold Standard Test Session — Regression Guard
+// ============================================================
+
+describe("Gold Standard Test Session", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const goldPath = path.join(__dirname, "fixtures", "gold_session.json");
+  let session;
+
+  beforeAll(() => {
+    session = JSON.parse(fs.readFileSync(goldPath, "utf-8"));
+  });
+
+  it("has 5 hands", () => {
+    expect(session.hands.length).toBe(5);
+  });
+
+  it("passes full validator with zero errors", () => {
+    const errors = HoldemValidator.validateSession(session);
+    const realErrors = errors.filter(e => e.severity === "error");
+    if (realErrors.length > 0) {
+      console.log("Gold session errors:", realErrors);
+    }
+    expect(realErrors).toEqual([]);
+  });
+
+  it("has correct position labels for every action in every hand", () => {
+    const POS = ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO"];
+    for (const hand of session.hands) {
+      const posMap = {};
+      for (let i = 0; i < 9; i++) {
+        posMap[((hand.button_seat - 1 + i) % 9) + 1] = POS[i];
+      }
+      for (const street of hand.action_sequence || []) {
+        for (const a of street.actions || []) {
+          if (a.position && posMap[a.seat]) {
+            expect(a.position).toBe(posMap[a.seat]);
+          }
+        }
+      }
+    }
+  });
+
+  it("has no duplicate cards within any hand", () => {
+    for (const hand of session.hands) {
+      const all = [...(hand.hero_cards || [])];
+      if (hand.board.flop) all.push(...hand.board.flop);
+      if (hand.board.turn) all.push(hand.board.turn);
+      if (hand.board.river) all.push(hand.board.river);
+      for (const cards of Object.values(hand.known_villain_cards || {})) {
+        all.push(...cards);
+      }
+      const dupes = HoldemValidator.findDuplicateCards(all);
+      expect(dupes).toEqual([]);
+    }
+  });
+
+  it("has correct showdown winners", () => {
+    for (const hand of session.hands) {
+      if (!hand.result.showdown) continue;
+      const board = [...(hand.board.flop || [])];
+      if (hand.board.turn) board.push(hand.board.turn);
+      if (hand.board.river) board.push(hand.board.river);
+      if (board.length !== 5) continue;
+
+      const heroRank = HoldemValidator.evaluateHoldemHand(hand.hero_cards, board);
+      for (const [seat, cards] of Object.entries(hand.known_villain_cards || {})) {
+        const vRank = HoldemValidator.evaluateHoldemHand(cards, board);
+        const cmp = HoldemValidator.compareHandRanks(heroRank, vRank);
+        if (hand.result.winner_seat === 1) {
+          expect(cmp).toBeGreaterThan(0);
+        } else {
+          expect(cmp).toBeLessThanOrEqual(0);
+        }
+      }
+    }
+  });
+
+  it("hero is always seat 1", () => {
+    for (const hand of session.hands) {
+      expect(hand.hero_seat).toBe(1);
+    }
   });
 });

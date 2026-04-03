@@ -15,6 +15,64 @@ const ShorthandLearner = (() => {
 
   const STORAGE_KEY = "sessionReplayerShorthandProfiles";
 
+  // ---- Fuzzy Matching (Levenshtein distance) ----
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+    return matrix[b.length][a.length];
+  }
+
+  /**
+   * Fuzzy lookup: find the best match in a dictionary when exact match fails.
+   * Only matches if the edit distance is <= maxDist AND the token is long enough
+   * (short tokens like "f", "x", "c" must match exactly to avoid false positives).
+   * Returns { key, value, distance } or null if no close match found.
+   */
+  // Words that look like poker terms but are NOT actions — skip fuzzy matching
+  const FUZZY_IGNORE = new Set([
+    "stacks", "stack", "chips", "hands", "hand", "board", "cards", "card",
+    "seats", "seat", "table", "blinds", "blind", "antes", "ante",
+    "dealer", "player", "players", "hero", "villain", "flop", "turn",
+    "river", "preflop", "showdown", "pot", "pots", "wins", "loses",
+    "with", "from", "into", "over", "about", "around", "through",
+    "folds", "checks", "calls", "bets", "raises" // these are exact matches, not fuzzy
+  ]);
+
+  function fuzzyLookup(token, dict, maxDist) {
+    if (!maxDist) maxDist = 2;
+    // Don't fuzzy-match tokens shorter than 4 chars — too ambiguous
+    if (token.length < 4) return null;
+    // Skip known non-action words
+    if (FUZZY_IGNORE.has(token)) return null;
+    let best = null;
+    for (const key of Object.keys(dict)) {
+      if (key.length < 4) continue; // skip short keys too
+      // Require first character to match — most typos don't change the first letter
+      if (token[0] !== key[0]) continue;
+      const dist = levenshtein(token, key);
+      // Only allow distance 1 for all words — distance 2 causes too many false positives
+      if (dist === 1 && (!best || dist < best.distance)) {
+        best = { key, value: dict[key], distance: dist };
+      }
+    }
+    return best;
+  }
+
   // ---- Default patterns ----
 
   const DEFAULT_PATTERNS = {
@@ -637,6 +695,18 @@ const ShorthandLearner = (() => {
       if (hand) hands.push(hand);
     });
 
+    // Persist any typos learned via fuzzy matching into the profile for next time
+    if (profile._learnedTypos && Object.keys(profile._learnedTypos).length > 0) {
+      const profiles = loadProfiles();
+      const stored = profiles[profileName || "default"] || {};
+      if (!stored.actions) stored.actions = {};
+      for (const [typo, canonical] of Object.entries(profile._learnedTypos)) {
+        stored.actions[typo] = canonical;
+      }
+      profiles[profileName || "default"] = stored;
+      saveProfiles(profiles);
+    }
+
     return {
       version: 2,
       app: "session-replayer",
@@ -648,7 +718,8 @@ const ShorthandLearner = (() => {
       flags: {
         has_unresolved_ambiguities: hands.some(h => h.warnings && h.warnings.length),
         confirmed_by_user: false,
-        parsed_with_profile: profileName || "default"
+        parsed_with_profile: profileName || "default",
+        fuzzy_corrections: profile._learnedTypos || {}
       }
     };
   }
@@ -742,41 +813,7 @@ const ShorthandLearner = (() => {
     const handNames = { ...DEFAULT_PATTERNS.handNames, ...(profile.handNames || {}) };
     const lower = text.toLowerCase();
 
-    // Check for "AKs" / "AKo" / "JTs" style notation (rank+rank+suited/offsuit)
-    const rankedHandRegex = /\b([AKQJT2-9])([AKQJT2-9])([so])\b/gi;
-    let rankedMatch;
-    while ((rankedMatch = rankedHandRegex.exec(text)) !== null) {
-      const r1 = rankedMatch[1].toUpperCase();
-      const r2 = rankedMatch[2].toUpperCase();
-      const isSuited = rankedMatch[3].toLowerCase() === "s";
-      if (isSuited) {
-        result.hero = [r1 + "s", r2 + "s"];
-      } else {
-        result.hero = [r1 + "h", r2 + "d"];
-      }
-      break;
-    }
-
-    // Check for hand name shortcuts ("pocket aces", "big slick", "AK suited")
-    if (!result.hero.length) for (const [name, rankPair] of Object.entries(handNames)) {
-      // Match whole words only (avoid "button" matching "tt", "the" matching "th")
-      const nameRegex = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
-      if (nameRegex.test(lower)) {
-        // Assign default suits if needed
-        const suited = lower.includes("suited") || lower.includes("suit");
-        if (rankPair[0] === rankPair[1]) {
-          // Pocket pair — assign different suits
-          result.hero = [rankPair[0] + "s", rankPair[1] + "h"];
-        } else if (suited) {
-          result.hero = [rankPair[0] + "s", rankPair[1] + "s"];
-        } else {
-          result.hero = [rankPair[0] + "h", rankPair[1] + "d"];
-        }
-        break;
-      }
-    }
-
-    // Standard card codes: Ah, Ks, Td, 9c
+    // Standard card codes first: Ah, Ks, Td, 9c — these take priority over hand names
     const codeRegex = /\b([AKQJT2-9])([shdc])\b/gi;
     let m;
     const codedCards = [];
@@ -830,9 +867,40 @@ const ShorthandLearner = (() => {
 
     result.all = codedCards;
 
-    // If we didn't get hero cards from hand names, use first 2 coded cards
-    if (!result.hero.length && codedCards.length >= 2) {
+    // Assign hero cards: prefer explicit card codes, then ranked hand, then hand names
+    if (codedCards.length >= 2) {
       result.hero = codedCards.slice(0, 2);
+    }
+
+    // Fallback: "AKs" / "AKo" / "JTs" style notation (rank+rank+suited/offsuit)
+    if (!result.hero.length) {
+      const rankedHandRegex = /\b([AKQJT2-9])([AKQJT2-9])([so])\b/gi;
+      let rankedMatch;
+      while ((rankedMatch = rankedHandRegex.exec(text)) !== null) {
+        const r1 = rankedMatch[1].toUpperCase();
+        const r2 = rankedMatch[2].toUpperCase();
+        const isSuited = rankedMatch[3].toLowerCase() === "s";
+        result.hero = isSuited ? [r1 + "s", r2 + "s"] : [r1 + "h", r2 + "d"];
+        break;
+      }
+    }
+
+    // Fallback: hand name shortcuts ("pocket aces", "big slick")
+    if (!result.hero.length) {
+      for (const [name, rankPair] of Object.entries(handNames)) {
+        const nameRegex = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+        if (nameRegex.test(lower)) {
+          const suited = lower.includes("suited") || lower.includes("suit");
+          if (rankPair[0] === rankPair[1]) {
+            result.hero = [rankPair[0] + "s", rankPair[1] + "h"];
+          } else if (suited) {
+            result.hero = [rankPair[0] + "s", rankPair[1] + "s"];
+          } else {
+            result.hero = [rankPair[0] + "h", rankPair[1] + "d"];
+          }
+          break;
+        }
+      }
     }
 
     // Find board cards by street markers
@@ -965,6 +1033,27 @@ const ShorthandLearner = (() => {
             i += 2;
             continue;
           }
+        }
+
+        // Fuzzy fallback: if token looks like a typo of a known action, use it
+        // and learn the typo for next time so it becomes an exact match.
+        const fuzzyAction = fuzzyLookup(token, actions);
+        if (fuzzyAction) {
+          // Persist the typo → canonical mapping into the actions dict for this parse
+          actions[token] = fuzzyAction.value;
+          // Also queue it for profile learning (stored at end of parse)
+          if (!profile._learnedTypos) profile._learnedTypos = {};
+          profile._learnedTypos[token] = fuzzyAction.value;
+
+          const actor = findActorBefore(tokens, i, positions, heroAliases, villainAliases, playerTracker);
+          const entry = { seat: actor.seat, position: actor.position, action: fuzzyAction.value, _fuzzy: token };
+          const amount = extractAmountFromTokens(tokens, i, bb);
+          if (amount > 0 && fuzzyAction.value !== "fold" && fuzzyAction.value !== "check") {
+            entry.amount = amount;
+          }
+          streetActions[currentStreet].push(entry);
+          i++;
+          continue;
         }
 
         i++;
@@ -1112,7 +1201,9 @@ const ShorthandLearner = (() => {
     extractAllCards,
     extractCardsFlexible,
     extractAmount,
-    alignByCardOverlap
+    alignByCardOverlap,
+    levenshtein,
+    fuzzyLookup
   };
 })();
 

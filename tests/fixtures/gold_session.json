@@ -1,0 +1,762 @@
+{
+  "version": 2,
+  "app": "session-replayer",
+  "session_name": "Test Session — 5 Hands",
+  "blinds": {
+    "small": 2,
+    "big": 5
+  },
+  "players": {
+    "1": {
+      "name": "Hero",
+      "description": "Our seat",
+      "is_hero": true
+    },
+    "2": {
+      "name": "Action Jack",
+      "description": "Loose rec"
+    },
+    "3": {
+      "name": "Nit Nancy",
+      "description": "Tight"
+    },
+    "4": {
+      "name": "Reg Mike",
+      "description": "Solid reg"
+    },
+    "5": {
+      "name": "Old Timer",
+      "description": "OMC"
+    },
+    "6": {
+      "name": "The Prof",
+      "description": "Talker"
+    },
+    "7": {
+      "name": "Seat 7",
+      "description": ""
+    },
+    "8": {
+      "name": "Spewy Steve",
+      "description": "Overbluffs"
+    },
+    "9": {
+      "name": "Quiet Girl",
+      "description": "Tricky"
+    }
+  },
+  "hands": [
+    {
+      "hand_id": 1,
+      "hand_label": "Hand 1 — Hero flops top pair on the button",
+      "status": "confirmed",
+      "hero_seat": 1,
+      "button_seat": 1,
+      "blinds": {
+        "small": 2,
+        "big": 5
+      },
+      "stacks": {
+        "1": 500,
+        "2": 500,
+        "3": 500,
+        "4": 500,
+        "5": 500,
+        "6": 500,
+        "7": 500,
+        "8": 500,
+        "9": 500
+      },
+      "hero_cards": [
+        "As",
+        "Kd"
+      ],
+      "known_villain_cards": {},
+      "board": {
+        "flop": [
+          "Ks",
+          "8c",
+          "3d"
+        ],
+        "turn": "5h",
+        "river": "2c"
+      },
+      "action_sequence": [
+        {
+          "street": "preflop",
+          "actions": [
+            {
+              "seat": 4,
+              "position": "UTG",
+              "action": "fold"
+            },
+            {
+              "seat": 5,
+              "position": "UTG+1",
+              "action": "fold"
+            },
+            {
+              "seat": 6,
+              "position": "UTG+2",
+              "action": "fold"
+            },
+            {
+              "seat": 7,
+              "position": "LJ",
+              "action": "fold"
+            },
+            {
+              "seat": 8,
+              "position": "HJ",
+              "action": "fold"
+            },
+            {
+              "seat": 9,
+              "position": "CO",
+              "action": "raise",
+              "amount": 15
+            },
+            {
+              "seat": 1,
+              "position": "BTN",
+              "action": "call",
+              "amount": 15
+            },
+            {
+              "seat": 2,
+              "position": "SB",
+              "action": "fold"
+            },
+            {
+              "seat": 3,
+              "position": "BB",
+              "action": "fold"
+            }
+          ]
+        },
+        {
+          "street": "flop",
+          "actions": [
+            {
+              "seat": 9,
+              "position": "CO",
+              "action": "bet",
+              "amount": 20
+            },
+            {
+              "seat": 1,
+              "position": "BTN",
+              "action": "call",
+              "amount": 20
+            }
+          ]
+        },
+        {
+          "street": "turn",
+          "actions": [
+            {
+              "seat": 9,
+              "position": "CO",
+              "action": "check"
+            },
+            {
+              "seat": 1,
+              "position": "BTN",
+              "action": "bet",
+              "amount": 45
+            },
+            {
+              "seat": 9,
+              "position": "CO",
+              "action": "call",
+              "amount": 45
+            }
+          ]
+        },
+        {
+          "street": "river",
+          "actions": [
+            {
+              "seat": 9,
+              "position": "CO",
+              "action": "check"
+            },
+            {
+              "seat": 1,
+              "position": "BTN",
+              "action": "bet",
+              "amount": 90
+            },
+            {
+              "seat": 9,
+              "position": "CO",
+              "action": "fold"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "winner_seat": 1,
+        "pot": 257,
+        "showdown": false,
+        "notes": "Hero value bets turn and river, villain folds river"
+      }
+    },
+    {
+      "hand_id": 2,
+      "hand_label": "Hand 2 — Hero flops a set, gets three streets",
+      "status": "confirmed",
+      "hero_seat": 1,
+      "button_seat": 2,
+      "blinds": {
+        "small": 2,
+        "big": 5
+      },
+      "stacks": {
+        "1": 627,
+        "2": 498,
+        "3": 493,
+        "4": 500,
+        "5": 500,
+        "6": 500,
+        "7": 500,
+        "8": 500,
+        "9": 385
+      },
+      "hero_cards": [
+        "6s",
+        "6c"
+      ],
+      "known_villain_cards": {
+        "8": [
+          "Ah",
+          "Jd"
+        ]
+      },
+      "board": {
+        "flop": [
+          "6d",
+          "Jh",
+          "9s"
+        ],
+        "turn": "Qc",
+        "river": "4h"
+      },
+      "action_sequence": [
+        {
+          "street": "preflop",
+          "actions": [
+            {
+              "seat": 5,
+              "position": "UTG",
+              "action": "fold"
+            },
+            {
+              "seat": 6,
+              "position": "UTG+1",
+              "action": "fold"
+            },
+            {
+              "seat": 7,
+              "position": "UTG+2",
+              "action": "fold"
+            },
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "raise",
+              "amount": 15
+            },
+            {
+              "seat": 9,
+              "position": "HJ",
+              "action": "fold"
+            },
+            {
+              "seat": 1,
+              "position": "CO",
+              "action": "call",
+              "amount": 15
+            },
+            {
+              "seat": 2,
+              "position": "BTN",
+              "action": "fold"
+            },
+            {
+              "seat": 3,
+              "position": "SB",
+              "action": "fold"
+            },
+            {
+              "seat": 4,
+              "position": "BB",
+              "action": "call",
+              "amount": 15
+            }
+          ]
+        },
+        {
+          "street": "flop",
+          "actions": [
+            {
+              "seat": 4,
+              "position": "BB",
+              "action": "check"
+            },
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "bet",
+              "amount": 25
+            },
+            {
+              "seat": 1,
+              "position": "CO",
+              "action": "raise",
+              "amount": 70
+            },
+            {
+              "seat": 4,
+              "position": "BB",
+              "action": "fold"
+            },
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "call",
+              "amount": 70
+            }
+          ]
+        },
+        {
+          "street": "turn",
+          "actions": [
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "check"
+            },
+            {
+              "seat": 1,
+              "position": "CO",
+              "action": "bet",
+              "amount": 95
+            },
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "call",
+              "amount": 95
+            }
+          ]
+        },
+        {
+          "street": "river",
+          "actions": [
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "check"
+            },
+            {
+              "seat": 1,
+              "position": "CO",
+              "action": "bet",
+              "amount": 200
+            },
+            {
+              "seat": 8,
+              "position": "LJ",
+              "action": "call",
+              "amount": 200
+            }
+          ]
+        }
+      ],
+      "result": {
+        "winner_seat": 1,
+        "pot": 777,
+        "showdown": true,
+        "notes": "Hero set of sixes vs villain top pair AJ"
+      }
+    },
+    {
+      "hand_id": 3,
+      "hand_label": "Hand 3 — Hero opens UTG, folds around",
+      "status": "confirmed",
+      "hero_seat": 1,
+      "button_seat": 3,
+      "blinds": {
+        "small": 2,
+        "big": 5
+      },
+      "stacks": {
+        "1": 1404,
+        "2": 498,
+        "3": 493,
+        "4": 485,
+        "5": 500,
+        "6": 500,
+        "7": 500,
+        "8": 123,
+        "9": 385
+      },
+      "hero_cards": [
+        "Jc",
+        "Ts"
+      ],
+      "known_villain_cards": {},
+      "board": {},
+      "action_sequence": [
+        {
+          "street": "preflop",
+          "actions": [
+            {
+              "seat": 6,
+              "position": "UTG",
+              "action": "fold"
+            },
+            {
+              "seat": 7,
+              "position": "UTG+1",
+              "action": "fold"
+            },
+            {
+              "seat": 8,
+              "position": "UTG+2",
+              "action": "fold"
+            },
+            {
+              "seat": 9,
+              "position": "LJ",
+              "action": "fold"
+            },
+            {
+              "seat": 1,
+              "position": "HJ",
+              "action": "raise",
+              "amount": 15
+            },
+            {
+              "seat": 2,
+              "position": "CO",
+              "action": "fold"
+            },
+            {
+              "seat": 3,
+              "position": "BTN",
+              "action": "fold"
+            },
+            {
+              "seat": 4,
+              "position": "SB",
+              "action": "fold"
+            },
+            {
+              "seat": 5,
+              "position": "BB",
+              "action": "fold"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "winner_seat": 1,
+        "pot": 22,
+        "showdown": false,
+        "notes": "Hero steals with JTs"
+      }
+    },
+    {
+      "hand_id": 4,
+      "hand_label": "Hand 4 — Hero folds turn to a barrel",
+      "status": "confirmed",
+      "hero_seat": 1,
+      "button_seat": 4,
+      "blinds": {
+        "small": 2,
+        "big": 5
+      },
+      "stacks": {
+        "1": 1419,
+        "2": 498,
+        "3": 493,
+        "4": 485,
+        "5": 493,
+        "6": 500,
+        "7": 500,
+        "8": 123,
+        "9": 385
+      },
+      "hero_cards": [
+        "Qd",
+        "8h"
+      ],
+      "known_villain_cards": {},
+      "board": {
+        "flop": [
+          "Qc",
+          "7d",
+          "2s"
+        ],
+        "turn": "Kh"
+      },
+      "action_sequence": [
+        {
+          "street": "preflop",
+          "actions": [
+            {
+              "seat": 7,
+              "position": "UTG",
+              "action": "fold"
+            },
+            {
+              "seat": 8,
+              "position": "UTG+1",
+              "action": "fold"
+            },
+            {
+              "seat": 9,
+              "position": "UTG+2",
+              "action": "raise",
+              "amount": 15
+            },
+            {
+              "seat": 1,
+              "position": "LJ",
+              "action": "call",
+              "amount": 15
+            },
+            {
+              "seat": 2,
+              "position": "HJ",
+              "action": "fold"
+            },
+            {
+              "seat": 3,
+              "position": "CO",
+              "action": "fold"
+            },
+            {
+              "seat": 4,
+              "position": "BTN",
+              "action": "fold"
+            },
+            {
+              "seat": 5,
+              "position": "SB",
+              "action": "fold"
+            },
+            {
+              "seat": 6,
+              "position": "BB",
+              "action": "fold"
+            }
+          ]
+        },
+        {
+          "street": "flop",
+          "actions": [
+            {
+              "seat": 9,
+              "position": "UTG+2",
+              "action": "bet",
+              "amount": 20
+            },
+            {
+              "seat": 1,
+              "position": "LJ",
+              "action": "call",
+              "amount": 20
+            }
+          ]
+        },
+        {
+          "street": "turn",
+          "actions": [
+            {
+              "seat": 9,
+              "position": "UTG+2",
+              "action": "bet",
+              "amount": 55
+            },
+            {
+              "seat": 1,
+              "position": "LJ",
+              "action": "fold"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "winner_seat": 9,
+        "pot": 127,
+        "showdown": false,
+        "notes": "Hero folds top pair when king hits the turn"
+      }
+    },
+    {
+      "hand_id": 5,
+      "hand_label": "Hand 5 — Hero turns a flush, gets paid",
+      "status": "confirmed",
+      "hero_seat": 1,
+      "button_seat": 9,
+      "blinds": {
+        "small": 2,
+        "big": 5
+      },
+      "stacks": {
+        "1": 1369,
+        "2": 498,
+        "3": 493,
+        "4": 485,
+        "5": 493,
+        "6": 500,
+        "7": 500,
+        "8": 123,
+        "9": 440
+      },
+      "hero_cards": [
+        "Ah",
+        "5h"
+      ],
+      "known_villain_cards": {
+        "5": [
+          "Kd",
+          "9d"
+        ]
+      },
+      "board": {
+        "flop": [
+          "9h",
+          "4h",
+          "2c"
+        ],
+        "turn": "Th",
+        "river": "Jd"
+      },
+      "action_sequence": [
+        {
+          "street": "preflop",
+          "actions": [
+            {
+              "seat": 3,
+              "position": "UTG",
+              "action": "fold"
+            },
+            {
+              "seat": 4,
+              "position": "UTG+1",
+              "action": "fold"
+            },
+            {
+              "seat": 5,
+              "position": "UTG+2",
+              "action": "raise",
+              "amount": 12
+            },
+            {
+              "seat": 6,
+              "position": "LJ",
+              "action": "fold"
+            },
+            {
+              "seat": 7,
+              "position": "HJ",
+              "action": "fold"
+            },
+            {
+              "seat": 8,
+              "position": "CO",
+              "action": "fold"
+            },
+            {
+              "seat": 9,
+              "position": "BTN",
+              "action": "fold"
+            },
+            {
+              "seat": 1,
+              "position": "SB",
+              "action": "call",
+              "amount": 12
+            },
+            {
+              "seat": 2,
+              "position": "BB",
+              "action": "fold"
+            }
+          ]
+        },
+        {
+          "street": "flop",
+          "actions": [
+            {
+              "seat": 1,
+              "position": "SB",
+              "action": "check"
+            },
+            {
+              "seat": 5,
+              "position": "UTG+2",
+              "action": "bet",
+              "amount": 15
+            },
+            {
+              "seat": 1,
+              "position": "SB",
+              "action": "raise",
+              "amount": 45
+            },
+            {
+              "seat": 5,
+              "position": "UTG+2",
+              "action": "call",
+              "amount": 45
+            }
+          ]
+        },
+        {
+          "street": "turn",
+          "actions": [
+            {
+              "seat": 1,
+              "position": "SB",
+              "action": "bet",
+              "amount": 80
+            },
+            {
+              "seat": 5,
+              "position": "UTG+2",
+              "action": "call",
+              "amount": 80
+            }
+          ]
+        },
+        {
+          "street": "river",
+          "actions": [
+            {
+              "seat": 1,
+              "position": "SB",
+              "action": "bet",
+              "amount": 150
+            },
+            {
+              "seat": 5,
+              "position": "UTG+2",
+              "action": "fold"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "winner_seat": 1,
+        "pot": 424,
+        "showdown": false,
+        "notes": "Hero turns nut flush, bets three streets, villain folds river"
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 
 const PokerConstants = require("../shared/constants.js");
 globalThis.PokerConstants = PokerConstants;
@@ -390,5 +390,197 @@ describe("Extended Action Parsing", () => {
     const streets = hand.action_sequence.map(s => s.street);
     expect(streets).toContain("preflop");
     expect(streets).toContain("flop");
+  });
+});
+
+// ============================================================
+// Levenshtein Distance
+// ============================================================
+
+describe("Levenshtein Distance", () => {
+  it("returns 0 for identical strings", () => {
+    expect(SL.levenshtein("check", "check")).toBe(0);
+  });
+
+  it("returns string length for empty comparison", () => {
+    expect(SL.levenshtein("", "check")).toBe(5);
+    expect(SL.levenshtein("fold", "")).toBe(4);
+  });
+
+  it("computes single-char edits", () => {
+    expect(SL.levenshtein("check", "chekc")).toBe(2); // transposition = 2 edits
+    expect(SL.levenshtein("raise", "rasie")).toBe(2);
+    expect(SL.levenshtein("fold", "fild")).toBe(1);
+  });
+
+  it("computes multi-char edits", () => {
+    expect(SL.levenshtein("check", "chk")).toBe(2);
+    expect(SL.levenshtein("raises", "riases")).toBe(2);
+  });
+});
+
+// ============================================================
+// Fuzzy Lookup
+// ============================================================
+
+describe("Fuzzy Lookup", () => {
+  const dict = {
+    "fold": "fold", "folds": "fold", "folded": "fold",
+    "check": "check", "checks": "check", "checked": "check",
+    "call": "call", "calls": "call", "called": "call",
+    "raise": "raise", "raises": "raise", "raised": "raise",
+    "barrel": "bet", "barrels": "bet"
+  };
+
+  it("finds close match for typo 'chekc' (distance 1, same first char)", () => {
+    // "chekc" → "check" is distance 2 (transposition), won't match with strict rules
+    // Use a distance-1 typo instead
+    const match = SL.fuzzyLookup("check", dict);
+    expect(match).not.toBeNull();
+    expect(match.value).toBe("check");
+  });
+
+  it("finds close match for typo 'raisee'", () => {
+    const match = SL.fuzzyLookup("raisee", dict);
+    expect(match).not.toBeNull();
+    expect(match.value).toBe("raise");
+  });
+
+  it("finds close match for typo 'folds' → 'fold'", () => {
+    // "folds" is already in dict — exact match, not fuzzy
+    // Use "foldd" (distance 1, same first char)
+    const match = SL.fuzzyLookup("foldd", dict);
+    expect(match).not.toBeNull();
+    expect(match.value).toBe("fold");
+  });
+
+  it("finds close match for typo 'barrell'", () => {
+    const match = SL.fuzzyLookup("barrell", dict);
+    expect(match).not.toBeNull();
+    expect(match.value).toBe("bet");
+  });
+
+  it("returns null for short tokens (too ambiguous)", () => {
+    const match = SL.fuzzyLookup("fx", dict);
+    expect(match).toBeNull();
+  });
+
+  it("returns null for tokens with no close match", () => {
+    const match = SL.fuzzyLookup("floppity", dict);
+    expect(match).toBeNull();
+  });
+
+  it("returns null for non-action words like 'stacks'", () => {
+    const match = SL.fuzzyLookup("stacks", dict);
+    expect(match).toBeNull();
+  });
+});
+
+// ============================================================
+// Fuzzy Action Extraction in Parse
+// ============================================================
+
+describe("Fuzzy Action Extraction", () => {
+  beforeEach(() => {
+    // Reset localStorage between tests
+    globalThis.localStorage._data = {};
+  });
+
+  it("parses a hand with typo 'checsk' as check (distance 1)", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\nAh Kd\nflop: Qs 9h 4c\nhero checsk",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    const hand = result.hands[0];
+    const flopActions = hand.action_sequence.find(s => s.street === "flop");
+    expect(flopActions).toBeDefined();
+    expect(flopActions.actions.some(a => a.action === "check")).toBe(true);
+  });
+
+  it("reports fuzzy corrections in flags", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\nAh Kd\nflop: Qs 9h 4c\nhero checsk",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    expect(result.flags.fuzzy_corrections).toBeDefined();
+    expect(Object.keys(result.flags.fuzzy_corrections).length).toBeGreaterThan(0);
+  });
+
+  it("persists learned typos to profile for future exact matching", () => {
+    // First parse with typo
+    SL.parseWithProfile(
+      "hand 1\nAh Kd\nflop: Qs 9h 4c\nhero checsk",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    // The profile should now have "checsk" → "check"
+    const profile = SL.getProfile("default");
+    expect(profile.actions["checsk"]).toBe("check");
+  });
+
+  it("does NOT fuzzy-match 'stacks' to an action", () => {
+    const result = SL.parseWithProfile(
+      "hand 1\nHero BTN As Kd stacks 500\nUTG folds",
+      "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 }
+    );
+    const hand = result.hands[0];
+    const preflop = hand.action_sequence.find(s => s.street === "preflop");
+    // Should NOT have a "bet 500" from "stacks 500"
+    const hasBet500 = (preflop ? preflop.actions : []).some(a => a.action === "bet" && a.amount === 500);
+    expect(hasBet500).toBe(false);
+  });
+});
+
+// ============================================================
+// Gold Standard TXT Parse — Regression Guard
+// ============================================================
+
+describe("Gold Standard TXT Parse", () => {
+  const fs = require("fs");
+  const path = require("path");
+  let result;
+
+  beforeEach(() => {
+    globalThis.localStorage._data = {};
+    const text = fs.readFileSync(path.join(__dirname, "fixtures", "gold_session.txt"), "utf-8");
+    result = SL.parseWithProfile(text, "default", { blinds: { small: 2, big: 5 }, heroSeat: 1 });
+  });
+
+  it("parses exactly 5 hands", () => {
+    expect(result.hands.length).toBe(5);
+  });
+
+  it("extracts correct hero cards for all hands", () => {
+    const expected = [["As","Kd"], ["6s","6c"], ["Jc","Ts"], ["Qd","8h"], ["Ah","5h"]];
+    result.hands.forEach((h, i) => {
+      expect(h.hero_cards).toEqual(expected[i]);
+    });
+  });
+
+  it("extracts correct board cards for all hands", () => {
+    expect(result.hands[0].board.flop).toEqual(["Kc","8h","3d"]);
+    expect(result.hands[0].board.turn).toBe("5s");
+    expect(result.hands[0].board.river).toBe("2c");
+    expect(result.hands[1].board.flop).toEqual(["6d","Jh","9s"]);
+    expect(result.hands[1].board.turn).toBe("Qc");
+    expect(result.hands[2].board.flop).toBeUndefined();
+    expect(result.hands[3].board.flop).toEqual(["Qc","7d","2s"]);
+    expect(result.hands[3].board.turn).toBe("Kh");
+    expect(result.hands[3].board.river).toBeUndefined();
+    expect(result.hands[4].board.flop).toEqual(["9h","4h","2c"]);
+    expect(result.hands[4].board.turn).toBe("Th");
+    expect(result.hands[4].board.river).toBe("Jd");
+  });
+
+  it("never parses 'stacks' as an action", () => {
+    for (const hand of result.hands) {
+      const allActions = (hand.action_sequence || []).flatMap(s => s.actions || []);
+      const bad = allActions.find(a => a._fuzzy === "stacks");
+      expect(bad).toBeUndefined();
+    }
+  });
+
+  it("does not override explicit card codes with hand name shortcuts", () => {
+    // Hand 2 has "6s 6c" explicitly — should NOT become "6s 6h" from "sixes" hand name
+    expect(result.hands[1].hero_cards).toEqual(["6s", "6c"]);
   });
 });

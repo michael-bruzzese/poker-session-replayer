@@ -1,0 +1,41 @@
+Hand 1
+Hero BTN As Kd stacks 500
+UTG folds, UTG+1 folds, UTG+2 folds, LJ folds, HJ folds, CO raises to 15, I call, SB folds, BB folds
+Flop: Kc 8h 3d
+CO bets 20, I call
+Turn: 5s
+he checks, I bet 45, he calls
+River: 2c
+he checks, hero bets 90, villain calls
+
+Hand 2
+Hero CO 6s 6c stacks 847
+UTG folds, UTG+1 folds, UTG+2 folds, LJ folds, HJ raises to 15, I call, BTN folds, SB folds, BB folds
+Flop: 6d Jh 9s
+HJ bets 25, I raise to 70, HJ calls
+Turn: Qc
+HJ checks, I bet 95, he calls
+River: 4h
+he checks, hero bets 200, he calls
+
+Hand 3
+Hero HJ Jc Ts stacks 1614
+UTG folds, UTG+1 folds, UTG+2 folds, LJ folds, I raise to 15, folds around
+
+Hand 4
+Hero LJ Qd 8h stacks 1629
+UTG folds, UTG+1 folds, UTG+2 raises to 15, I call, HJ folds, CO folds, BTN folds, SB folds, BB folds
+Flop: Qc 7d 2s
+UTG+2 bets 20, I call
+Turn: Kh
+he bets 55, I fold
+
+Hand 5
+Hero SB Ah 5h stacks 1594
+UTG folds, UTG+1 folds, UTG+2 folds, LJ folds, HJ raises to 12, CO folds, BTN folds, I call, BB folds
+Flop: 9h 4h 2c
+I check, villain bets 15, I raise to 45, he calls
+Turn: Th
+I bet 80, villain calls
+River: Jd
+I bet 150, he folds
