@@ -76,18 +76,18 @@
   /* ---- Game Context Banner ---- */
   .game-banner {
     background: linear-gradient(90deg, #1a2a1a 0%, #1a3a2a 50%, #1a2a1a 100%);
-    border-bottom: 1px solid #2a4a2a;
-    padding: 5px 16px;
+    border-bottom: 2px solid #2a5a2a;
+    padding: 8px 20px;
     display: flex;
     align-items: center;
-    gap: 16px;
-    font-size: 13px;
+    gap: 20px;
+    font-size: 16px;
     flex-shrink: 0;
   }
-  .game-banner .game-label { color: #6b6; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
-  .game-banner .game-desc { color: #bdb; flex: 1; }
-  .game-banner .game-blinds { color: #ffd700; font-weight: 700; }
-  .game-banner .game-extra { color: var(--text-muted); font-size: 12px; }
+  .game-banner .game-label { color: #6b6; font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: 1.5px; }
+  .game-banner .game-desc { color: #cec; flex: 1; font-weight: 600; }
+  .game-banner .game-blinds { color: #ffd700; font-weight: 800; font-size: 18px; }
+  .game-banner .game-extra { color: var(--text-muted); font-size: 14px; }
 
   /* ---- Main Layout ---- */
   .main-layout {
@@ -976,6 +976,9 @@
     <label style="font-size:13px;">Session Name:
       <input id="parseSessionName" style="width:200px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="Tuesday $2/5">
     </label>
+    <label style="font-size:13px;">Game Description:
+      <input id="parseSessionDesc" style="width:300px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="e.g. Playing 2-5 at the Wynn — straddle is on most hands">
+    </label>
   </div>
   <textarea id="parseTextArea" style="width:min(90%,700px); height:300px; padding:12px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:13px; resize:vertical;" placeholder="Paste session notes or JSON here..."></textarea>
   <div style="display:flex; gap:12px; margin-top:16px;">
@@ -1269,6 +1272,7 @@
     parseBlinds: document.getElementById("parseBlinds"),
     parseHeroSeat: document.getElementById("parseHeroSeat"),
     parseSessionName: document.getElementById("parseSessionName"),
+    parseSessionDesc: document.getElementById("parseSessionDesc"),
     parseLoadJsonBtn: document.getElementById("parseLoadJsonBtn"),
     parseBackBtn: document.getElementById("parseBackBtn"),
     parseStatus: document.getElementById("parseStatus"),
@@ -2013,6 +2017,7 @@
   function loadSession(data) {
     session.loaded = true;
     session.name = data.session_name || "Unnamed Session";
+    session.description = data.description || "";
     session.hands = data.hands || [];
     session.players = data.players || {};
     session.blinds = data.blinds || { small: 5, big: 10 };
@@ -2045,11 +2050,13 @@
     els.handCountDisplay.textContent = `${session.hands.length} hands`;
 
     // Game context banner
-    const blindsStr = `$${session.blinds.small}/$${session.blinds.big}`;
+    let blindsStr = `$${session.blinds.small}/$${session.blinds.big}`;
+    if (session.blinds.ante) blindsStr += ` (ante $${session.blinds.ante})`;
+    if (session.blinds.straddle) blindsStr += ` + $${session.blinds.straddle} straddle`;
     els.gameBlinds.textContent = blindsStr;
-    els.gameDesc.textContent = session.name || "";
+    els.gameDesc.textContent = session.description || session.name || "";
     els.gameExtra.textContent = session.hands.length + " hands";
-    els.gameBanner.style.display = session.name ? "flex" : "none";
+    els.gameBanner.style.display = "flex";
 
     renderHandList();
     renderPlayerInfo();
@@ -3297,11 +3304,20 @@
       const text = els.parseTextArea.value.trim();
       if (!text) { els.parseStatus.textContent = "Paste session data first."; return; }
 
+      // Apply user-entered session name and description
+      function applyParseScreenMeta(data) {
+        const nameVal = els.parseSessionName.value.trim();
+        const descVal = els.parseSessionDesc.value.trim();
+        if (nameVal) data.session_name = nameVal;
+        if (descVal) data.description = descVal;
+        return data;
+      }
+
       // Try JSON first
       try {
         const data = JSON.parse(text);
         if (data && (data.hands || data.action_sequence || data.version)) {
-          startQA(data);
+          startQA(applyParseScreenMeta(data));
           return;
         }
       } catch (_) { /* not JSON — try shorthand */ }
@@ -3315,7 +3331,7 @@
         });
         if (result.hands && result.hands.length > 0) {
           els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from text. Loading...`;
-          startQA(result);
+          startQA(applyParseScreenMeta(result));
           return;
         }
       }
