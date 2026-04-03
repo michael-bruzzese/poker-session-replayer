@@ -1191,6 +1191,9 @@
   </div>
 </div>
 
+<!-- JSZip for .docx file reading (inlined by build script) -->
+<script src="jszip.min.js"></script>
+
 <!-- SHARED_ENGINE_START (build script replaces this entire block with inlined JS) -->
 <script src="shared/constants.js"></script>
 <script src="shared/card_utils.js"></script>
@@ -3393,41 +3396,108 @@
   }
 
   function handleFile(file) {
+    const ext = file.name.split(".").pop().toLowerCase();
+
+    // .docx files are ZIP archives — extract the text from the XML
+    if (ext === "docx") {
+      handleDocxFile(file);
+      return;
+    }
+
     const reader = new FileReader();
+
+    reader.onerror = () => {
+      els.parseStatus.textContent = `Error reading ${file.name}. Try copy-pasting the text instead.`;
+      showScreen("parse");
+    };
 
     reader.onload = () => {
       const text = reader.result;
+      processTextInput(text, file.name);
+    };
 
-      // Try JSON first (regardless of extension)
+    reader.readAsText(file);
+  }
+
+  function handleDocxFile(file) {
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      els.parseStatus.textContent = `Error reading ${file.name}. Try copy-pasting the text instead.`;
+      showScreen("parse");
+    };
+
+    reader.onload = async () => {
       try {
-        const data = JSON.parse(text);
-        if (data && (data.hands || data.action_sequence || data.version)) {
-          startQA(data);
+        const arrayBuffer = reader.result;
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const docXml = await zip.file("word/document.xml").async("string");
+
+        // Extract text from the XML — strip tags, decode entities, normalize whitespace
+        const textContent = docXml
+          .replace(/<w:p[^>]*>/g, "\n")          // paragraph breaks
+          .replace(/<w:br[^>]*>/g, "\n")          // line breaks
+          .replace(/<w:tab[^>]*>/g, " ")          // tabs
+          .replace(/<[^>]+>/g, "")                // strip all XML tags
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+          .replace(/\r\n/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+
+        if (!textContent) {
+          els.parseStatus.textContent = `${file.name} appears to be empty. Try copy-pasting the text instead.`;
+          els.parseTextArea.value = "";
+          showScreen("parse");
           return;
         }
-      } catch (_) { /* not JSON, continue */ }
 
-      // Parse as shorthand text using ShorthandLearner
+        processTextInput(textContent, file.name);
+      } catch (err) {
+        els.parseStatus.textContent = `Could not read .docx file: ${err.message}. Try copy-pasting the text instead.`;
+        els.parseTextArea.value = "";
+        showScreen("parse");
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  function processTextInput(text, fileName) {
+    // Try JSON first (regardless of extension)
+    try {
+      const data = JSON.parse(text);
+      if (data && (data.hands || data.action_sequence || data.version)) {
+        startQA(data);
+        return;
+      }
+    } catch (_) { /* not JSON, continue */ }
+
+    // Parse as shorthand text using ShorthandLearner
+    try {
       const SL = window.ShorthandLearner;
       if (SL) {
         const result = SL.parseWithProfile(text, "default", {
           blinds: session.blinds || { small: 2, big: 5 },
           heroSeat: 1,
-          sessionName: file.name.replace(/\.[^.]+$/, "")
+          sessionName: (fileName || "session").replace(/\.[^.]+$/, "")
         });
-        if (result.hands && result.hands.length > 0) {
+        if (result && result.hands && result.hands.length > 0) {
           startQA(result);
           return;
         }
       }
+    } catch (err) {
+      console.warn("ShorthandLearner error:", err);
+    }
 
-      // Fallback: show in parse screen for manual review
-      els.parseTextArea.value = text;
-      els.parseStatus.textContent = `Loaded ${file.name} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
-      showScreen("parse");
-    };
-
-    reader.readAsText(file);
+    // Fallback: show in parse screen for manual review
+    els.parseTextArea.value = text;
+    els.parseStatus.textContent = `Loaded ${fileName || "file"} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
+    showScreen("parse");
   }
 
   // ---- Init ----

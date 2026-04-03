@@ -97,6 +97,17 @@ def build():
     shared_js = read_shared_js()
     shared_script = f"<script>\n{shared_js}\n</script>"
 
+    # Inline JSZip if present
+    jszip_file = os.path.join(SCRIPT_DIR, "jszip.min.js")
+    if os.path.isfile(jszip_file):
+        with open(jszip_file, "r", encoding="utf-8") as f:
+            jszip_js = f.read()
+        html = html.replace(
+            '<script src="jszip.min.js"></script>',
+            f"<script>\n{jszip_js}\n</script>"
+        )
+        print(f"  Inlined JSZip ({len(jszip_js):,} bytes)")
+
     # Replace dev-mode script tags with inlined JS
     start_marker = "<!-- SHARED_ENGINE_START"
     end_marker = "<!-- SHARED_ENGINE_END -->"
