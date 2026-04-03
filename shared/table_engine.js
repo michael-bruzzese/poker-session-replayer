@@ -429,12 +429,13 @@ const PokerEngine = (() => {
       removePendingActionSeat(seat, players, tableState);
     }
 
-    // Heads-up auto-fold on call
+    // Heads-up auto-fold on call — only when no other players still need to act
     if (
       action === "call" &&
       toCall > 0 &&
       tableState.pendingHeadsUpAggressorSeat >= 0 &&
-      seat !== tableState.pendingHeadsUpAggressorSeat
+      seat !== tableState.pendingHeadsUpAggressorSeat &&
+      tableState.pendingActionSeats.length === 0
     ) {
       autoFoldRemainingPlayers(players, tableState, seatCount, [tableState.pendingHeadsUpAggressorSeat, seat]);
     }

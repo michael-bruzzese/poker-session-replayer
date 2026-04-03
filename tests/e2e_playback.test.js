@@ -120,18 +120,14 @@ function simulateHandPlayback(hand, sessionBlinds) {
 // ============================================================
 
 describe("End-to-End Session Playback", () => {
-  it("plays through all 5 gold session hands — meaningful actions succeed", () => {
+  it("plays through all 5 gold session hands — every action succeeds", () => {
     for (const hand of goldSession.hands) {
       const result = simulateHandPlayback(hand, goldSession.blinds);
 
-      // Actions that fail should only be because the player was already folded
-      // (engine's auto-fold marked them before the data's explicit fold)
-      const realFailures = result.stepLog.filter(
-        (s) => !s.success && !s.alreadyFolded
-      );
+      const failures = result.stepLog.filter((s) => !s.success);
       expect(
-        realFailures,
-        `Hand ${hand.hand_id}: Non-redundant actions failed: ${JSON.stringify(realFailures)}`
+        failures,
+        `Hand ${hand.hand_id}: Actions failed: ${JSON.stringify(failures)}`
       ).toHaveLength(0);
     }
   });
@@ -154,8 +150,8 @@ describe("Hand 1 — Hero flops top pair, value bets, villain folds river", () =
   });
 
   it("non-redundant actions all succeed", () => {
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 
   it("goes through all four streets", () => {
@@ -189,8 +185,8 @@ describe("Hand 2 — Hero flops a set, three streets of value", () => {
   });
 
   it("non-redundant actions all succeed", () => {
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 
   it("flop raise costs more than initial bet", () => {
@@ -215,8 +211,8 @@ describe("Hand 3 — Preflop only, everyone folds to hero's open", () => {
   });
 
   it("non-redundant actions all succeed", () => {
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 
   it("only preflop actions", () => {
@@ -231,8 +227,8 @@ describe("Hand 4 — Hero folds turn to a barrel", () => {
   });
 
   it("non-redundant actions all succeed", () => {
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 
   it("hero ends up folded", () => {
@@ -254,8 +250,8 @@ describe("Hand 5 — Hero turns flush, three streets, villain folds river", () =
   });
 
   it("non-redundant actions all succeed", () => {
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 
   it("check-raise on flop works correctly", () => {
@@ -285,8 +281,8 @@ describe("Hold'em Rule Invariants — every hand", () => {
 
   it("no non-redundant action fails", () => {
     for (const { hand, result } of handResults) {
-      const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-      expect(realFailures, `Hand ${hand.hand_id}`).toHaveLength(0);
+      const failures = result.stepLog.filter((s) => !s.success);
+      expect(failures, `Hand ${hand.hand_id}`).toHaveLength(0);
     }
   });
 
@@ -427,8 +423,8 @@ describe("Street transitions", () => {
     expect(streets).toContain("river");
 
     // All non-redundant actions succeed
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 
   it("preflop-only hand works correctly", () => {
@@ -438,8 +434,8 @@ describe("Street transitions", () => {
     const streets = [...new Set(result.stepLog.map((s) => s.street))];
     expect(streets).toEqual(["preflop"]);
 
-    const realFailures = result.stepLog.filter((s) => !s.success && !s.alreadyFolded);
-    expect(realFailures).toHaveLength(0);
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
   });
 });
 
@@ -535,32 +531,25 @@ describe("Rewind — replay to any step produces consistent state", () => {
 });
 
 // ============================================================
-// Known Issue: Auto-fold in heads-up detection
+// Regression: Auto-fold no longer fires prematurely
 // ============================================================
 
-describe("Known Issue — Preflop auto-fold of SB/BB", () => {
-  it("documents that engine auto-folds SB/BB when action goes heads-up before they act", () => {
-    // Hand 1: CO raises, BTN calls — engine detects heads-up and auto-folds SB/BB
-    // This is a known engine behavior that the app works around by not checking success
+describe("Regression — SB/BB act before heads-up auto-fold", () => {
+  it("SB and BB folds succeed (not auto-folded prematurely)", () => {
+    // Hand 1: CO raises, BTN calls — SB and BB must still get to act
     const hand = goldSession.hands[0];
     const result = simulateHandPlayback(hand, goldSession.blinds);
 
-    // Count actions that failed because player was already auto-folded
-    const autoFolded = result.stepLog.filter((s) => !s.success && s.alreadyFolded);
-    // This documents the behavior — SB and BB folds are redundant
-    if (autoFolded.length > 0) {
-      // This is expected current behavior — not a test failure
-      expect(autoFolded.every((s) => s.action === "fold")).toBe(true);
-    }
+    // ALL actions must succeed — no auto-fold before players act
+    const failures = result.stepLog.filter((s) => !s.success);
+    expect(failures).toHaveLength(0);
 
-    // Despite the redundant folds, the game state is correct
-    const active = result.players.filter((p) => p.status !== "folded");
-    // Either 1 (villain folded river) or 2 (both still in) — depends on final action
-    expect(active.length).toBeGreaterThanOrEqual(1);
-
-    // No negative stacks
-    for (const p of result.players) {
-      expect(p.stack).toBeGreaterThanOrEqual(0);
-    }
+    // SB and BB folds should be real successful folds, not redundant
+    const sbFold = result.stepLog.find((s) => s.seat === 2 && s.action === "fold");
+    const bbFold = result.stepLog.find((s) => s.seat === 3 && s.action === "fold");
+    expect(sbFold.success).toBe(true);
+    expect(bbFold.success).toBe(true);
+    expect(sbFold.alreadyFolded).toBe(false);
+    expect(bbFold.alreadyFolded).toBe(false);
   });
 });
