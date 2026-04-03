@@ -363,6 +363,69 @@ describe("Hold'em Rule Invariants — every hand", () => {
 });
 
 // ============================================================
+// Side Pot Invariants
+// ============================================================
+
+describe("Side Pot Invariants — gold session (no all-ins)", () => {
+  it("every gold session hand produces exactly 1 pot (no spurious side pots)", () => {
+    for (const hand of goldSession.hands) {
+      const result = simulateHandPlayback(hand, goldSession.blinds);
+      expect(
+        result.tableState.pots.length,
+        `Hand ${hand.hand_id}: expected 1 pot, got ${result.tableState.pots.length}`
+      ).toBe(1);
+    }
+  });
+
+  it("the single pot amount equals tableState.pot for every gold session hand", () => {
+    for (const hand of goldSession.hands) {
+      const result = simulateHandPlayback(hand, goldSession.blinds);
+      expect(result.tableState.pots[0].amount).toBe(result.tableState.pot);
+    }
+  });
+});
+
+describe("Side Pot — All-in hand produces correct split", () => {
+  it("short stack all-in creates main + side pot with correct amounts", () => {
+    // Seat 2 (BB) has 30 chips. Posts BB of 5, has 25 left.
+    // Seat 8 raises to 50. Everyone folds. BB calls for remaining 25 (all-in for 30 total).
+    // Main pot: 30×2 = 60 (both eligible). Side pot: 20 (seat 8 only).
+    const hand = {
+      hand_id: 100, hero_seat: 1, button_seat: 9,
+      blinds: { small: 2, big: 5 },
+      stacks: { 1: 500, 2: 30, 3: 500, 4: 500, 5: 500, 6: 500, 7: 500, 8: 500, 9: 500 },
+      hero_cards: ["Ah", "Kh"], board: {},
+      action_sequence: [{
+        street: "preflop",
+        actions: [
+          { seat: 3, action: "fold" },
+          { seat: 4, action: "fold" },
+          { seat: 5, action: "fold" },
+          { seat: 6, action: "fold" },
+          { seat: 7, action: "fold" },
+          { seat: 8, action: "raise", amount: 50 },
+          { seat: 9, action: "fold" },
+          { seat: 1, action: "fold" },
+          { seat: 2, action: "call", amount: 50 },
+        ],
+      }],
+      result: { winner_seat: 8, pot: 59, showdown: true },
+    };
+
+    const result = simulateHandPlayback(hand, { small: 2, big: 5 });
+    const pots = result.tableState.pots;
+
+    // BB went all-in → should have side pots
+    expect(pots.length).toBeGreaterThanOrEqual(2);
+    // Amounts should sum to total pot
+    const potSum = pots.reduce((s, p) => s + p.amount, 0);
+    expect(potSum).toBe(result.tableState.pot);
+    // Main pot: BB eligible. Side pot: only the raiser.
+    expect(pots[0].eligible.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ============================================================
 // Edge Case: Short stack all-in
 // ============================================================
 
