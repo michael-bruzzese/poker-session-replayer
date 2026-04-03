@@ -310,17 +310,14 @@
   .seat-stack { font-size: 28px; font-weight: 900; color: #7bed7b; text-shadow: 0 2px 4px rgba(0,0,0,0.5); cursor: pointer; }
   .seat-stack:hover { text-decoration: underline; }
   .seat-stack-delta {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 800;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: -22px;
     white-space: nowrap;
     opacity: 0;
     transition: opacity 1.2s ease-out;
     pointer-events: none;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    margin-top: -2px;
   }
   .seat-stack-delta.loss { color: #ff6666; }
   .seat-stack-delta.gain { color: #66ff66; }
@@ -1613,18 +1610,21 @@ const PokerEngine = (() => {
     // Get all non-folded players sorted by total hand commitment (ascending)
     const contenders = players
       .filter(p => p.status !== "folded")
-      .map(p => ({ seat: p.seat, committed: p.committedHand }))
+      .map(p => ({ seat: p.seat, committed: p.committedHand, status: p.status }))
       .sort((a, b) => a.committed - b.committed);
-
-    // Also include folded players' contributions (they contributed but aren't eligible)
-    const foldedCommits = players
-      .filter(p => p.status === "folded")
-      .reduce((sum, p) => sum + p.committedHand, 0);
 
     const pots = [];
 
     if (contenders.length === 0) {
       tableState.pots = [{ amount: tableState.pot, eligible: [] }];
+      return;
+    }
+
+    // Side pots only exist when at least one player is all-in.
+    // During normal betting (no all-ins), there is always just one main pot.
+    const hasAllIn = contenders.some(c => c.status === "allin");
+    if (!hasAllIn) {
+      tableState.pots = [{ amount: tableState.pot, eligible: contenders.map(c => c.seat) }];
       return;
     }
 
