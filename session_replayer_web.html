@@ -389,26 +389,39 @@
   /* Seat-level action badge — persists for the street */
   .seat-action {
     position: absolute;
-    bottom: -24px;
+    bottom: -28px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 13px;
-    font-weight: 700;
-    padding: 3px 12px;
-    border-radius: 10px;
+    font-size: 18px;
+    font-weight: 800;
+    padding: 4px 14px;
+    border-radius: 12px;
     white-space: nowrap;
     opacity: 0;
     transition: opacity 0.2s;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
   .seat-action.visible { opacity: 1; }
-  .seat-action.fold { background: #662222; color: #faa; }
-  .seat-action.check { background: #336633; color: #afa; }
-  .seat-action.call { background: #336633; color: #afa; }
-  .seat-action.bet { background: #664400; color: #fda; }
-  .seat-action.raise { background: #664400; color: #fda; }
-  .seat-action.all-in { background: #663366; color: #faf; }
+  .seat-action.fold { background: #882222; color: #ffaaaa; }
+  .seat-action.check { background: #227722; color: #88ff88; }
+  .seat-action.call { background: #225588; color: #88ccff; }
+  .seat-action.bet { background: #886600; color: #ffdd66; }
+  .seat-action.raise { background: #886600; color: #ffdd66; }
+  .seat-action.all-in { background: #882266; color: #ff88ff; }
   .seat-action.blind { background: #333355; color: #aaf; }
   .seat-action.straddle { background: #553333; color: #faa; }
+
+  /* Keyframes for action popup attention effect */
+  @keyframes popupBounceIn {
+    0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+    70% { transform: translate(-50%, -50%) scale(0.95); }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  @keyframes allInPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(255,100,100,0.6), 0 0 40px rgba(255,50,50,0.3); }
+    50% { box-shadow: 0 0 30px rgba(255,200,50,0.8), 0 0 60px rgba(255,100,50,0.5); }
+  }
 
   /* Big center-table action pop-up */
   .action-popup {
@@ -417,46 +430,49 @@
     z-index: 20;
     pointer-events: none;
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.5);
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out, left 0.12s ease-out, top 0.12s ease-out;
+    transform: translate(-50%, -50%) scale(0.3);
+    transition: left 0.12s ease-out, top 0.12s ease-out;
   }
   .action-popup.visible {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
+    animation: popupBounceIn 0.35s ease-out forwards;
   }
   .action-popup.fade-out {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.05);
-    transition: opacity 0.4s ease-in, transform 0.4s ease-in;
+    transition: opacity 0.5s ease-in, transform 0.5s ease-in;
+    animation: none;
   }
   .action-popup-player {
-    font-size: 16px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 4px;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.7);
-  }
-  .action-popup-action {
-    font-size: 36px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    text-shadow: 0 3px 8px rgba(0,0,0,0.5);
-    padding: 6px 24px;
-    border-radius: 12px;
-  }
-  .action-popup-action.fold { color: #ff8888; background: rgba(100,20,20,0.7); }
-  .action-popup-action.check { color: #88ff88; background: rgba(20,80,20,0.7); }
-  .action-popup-action.call { color: #88ff88; background: rgba(20,80,20,0.7); }
-  .action-popup-action.bet { color: #ffdd66; background: rgba(100,60,0,0.7); }
-  .action-popup-action.raise { color: #ffdd66; background: rgba(100,60,0,0.7); }
-  .action-popup-action.all-in { color: #ff88ff; background: rgba(80,20,80,0.7); }
-  .action-popup-amount {
     font-size: 20px;
     font-weight: 700;
     color: #fff;
-    margin-top: 2px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    margin-bottom: 6px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  .action-popup-action {
+    font-size: 54px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    padding: 10px 32px;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
+  }
+  .action-popup-action.fold { color: #ff9999; background: rgba(120,20,20,0.85); }
+  .action-popup-action.check { color: #88ff88; background: rgba(20,90,20,0.85); }
+  .action-popup-action.call { color: #88ccff; background: rgba(20,60,120,0.85); }
+  .action-popup-action.bet { color: #ffdd66; background: rgba(120,70,0,0.85); }
+  .action-popup-action.raise { color: #ffdd66; background: rgba(120,70,0,0.85); }
+  .action-popup-action.all-in { color: #ff88ff; background: rgba(100,20,100,0.85); animation: allInPulse 1s ease-in-out infinite; }
+  .action-popup-amount {
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    margin-top: 4px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
   }
 
   /* Street announcement banner */
@@ -1689,7 +1705,7 @@
     renderSeats();
   }
 
-  // Position popup halfway between seat and table center
+  // Position popup between seat and table center, clamped to felt bounds
   function popupPositionForSeat(seat) {
     const seatEl = els.seatElements[seat];
     if (!seatEl) return { left: "50%", top: "50%" };
@@ -1702,9 +1718,14 @@
     const centerX = feltRect.width / 2;
     const centerY = feltRect.height / 2;
 
-    // 55% of the way from seat toward center (closer to seat than center)
-    const px = seatCx + (centerX - seatCx) * 0.55;
-    const py = seatCy + (centerY - seatCy) * 0.55;
+    // 50% of the way from seat toward center
+    let px = seatCx + (centerX - seatCx) * 0.50;
+    let py = seatCy + (centerY - seatCy) * 0.50;
+
+    // Clamp to felt bounds with margin so large popups don't overflow
+    const margin = 120;
+    px = Math.max(margin, Math.min(feltRect.width - margin, px));
+    py = Math.max(60, Math.min(feltRect.height - 60, py));
 
     return { left: px + "px", top: py + "px" };
   }
@@ -1740,8 +1761,8 @@
       els.actionPopup.classList.add("fade-out");
       popupFadeTimer = setTimeout(() => {
         els.actionPopup.className = "action-popup";
-      }, 500);
-    }, 1400);
+      }, 600);
+    }, 2800);
   }
 
   function clearAllCallouts() {
