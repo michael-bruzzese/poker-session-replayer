@@ -226,18 +226,21 @@ const PokerEngine = (() => {
     // Get all non-folded players sorted by total hand commitment (ascending)
     const contenders = players
       .filter(p => p.status !== "folded")
-      .map(p => ({ seat: p.seat, committed: p.committedHand }))
+      .map(p => ({ seat: p.seat, committed: p.committedHand, status: p.status }))
       .sort((a, b) => a.committed - b.committed);
-
-    // Also include folded players' contributions (they contributed but aren't eligible)
-    const foldedCommits = players
-      .filter(p => p.status === "folded")
-      .reduce((sum, p) => sum + p.committedHand, 0);
 
     const pots = [];
 
     if (contenders.length === 0) {
       tableState.pots = [{ amount: tableState.pot, eligible: [] }];
+      return;
+    }
+
+    // Side pots only exist when at least one player is all-in.
+    // During normal betting (no all-ins), there is always just one main pot.
+    const hasAllIn = contenders.some(c => c.status === "allin");
+    if (!hasAllIn) {
+      tableState.pots = [{ amount: tableState.pot, eligible: contenders.map(c => c.seat) }];
       return;
     }
 

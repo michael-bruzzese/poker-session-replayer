@@ -1607,3 +1607,208 @@ describe("Gold Standard Test Session", () => {
     }
   });
 });
+
+// ============================================================
+// Side Pot Calculation
+// ============================================================
+
+describe("Side Pot Calculation", () => {
+  const PE = PokerEngine;
+
+  function makePlayer(seat, stack, committed, status) {
+    return {
+      seat, stack, status: status || "active",
+      committedHand: committed || 0, committedStreet: committed || 0,
+      name: `Seat ${seat}`, position: "", description: ""
+    };
+  }
+
+  function makeTableState(pot) {
+    return { pot: pot || 0, pots: [], toCall: 0, minRaiseTo: 5, actionSeat: -1,
+      pendingActionSeats: [], headsUpLocked: false, lastAggressorSeat: -1,
+      lastFullRaiseSize: 5, pendingHeadsUpAggressorSeat: -1 };
+  }
+
+  it("normal 2-player pot (no all-in) → single pot entry", () => {
+    // Raiser put in 15, caller put in 15. No one is all-in.
+    const players = [
+      makePlayer(0, 485, 15, "active"),
+      makePlayer(1, 485, 15, "active"),
+      makePlayer(2, 495, 5, "folded"),  // BB folded
+    ];
+    const ts = makeTableState(35);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].amount).toBe(35);
+    expect(ts.pots[0].eligible).toContain(0);
+    expect(ts.pots[0].eligible).toContain(1);
+  });
+
+  it("mid-betting with different commitments but no all-in → single pot (THE BUG)", () => {
+    // Preflop: BB posted 5, UTG raised to 15 — BB hasn't acted yet
+    // No one is all-in, but committedHand differs (5 vs 15)
+    // Should be ONE pot, not two
+    const players = [
+      makePlayer(0, 485, 15, "active"),  // UTG raised to 15
+      makePlayer(1, 495, 5, "active"),   // BB posted 5, hasn't acted yet
+    ];
+    const ts = makeTableState(20);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].amount).toBe(20);
+  });
+
+  it("flop bet before call — different street commitments, no all-in → single pot", () => {
+    // After preflop both put 15. Now on flop, player 0 bets 30. Player 1 hasn't acted.
+    // committedHand: 45 vs 15. No all-in. Should still be one pot.
+    const players = [
+      makePlayer(0, 455, 45, "active"),  // 15 preflop + 30 flop bet
+      makePlayer(1, 485, 15, "active"),  // 15 preflop, hasn't acted on flop
+    ];
+    const ts = makeTableState(60);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].amount).toBe(60);
+  });
+
+  it("3-player pot, one folds, no all-in → single pot", () => {
+    const players = [
+      makePlayer(0, 470, 30, "active"),
+      makePlayer(1, 470, 30, "active"),
+      makePlayer(2, 485, 15, "folded"),
+    ];
+    const ts = makeTableState(75);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].amount).toBe(75);
+  });
+
+  it("preflop with blinds + raise + call + folds → single pot", () => {
+    // SB=2, BB=5, UTG raises to 15, BTN calls 15, SB folds, BB folds
+    const players = [
+      makePlayer(0, 485, 15, "active"),  // UTG raiser
+      makePlayer(1, 485, 15, "active"),  // BTN caller
+      makePlayer(2, 498, 2, "folded"),   // SB folded
+      makePlayer(3, 495, 5, "folded"),   // BB folded
+    ];
+    const ts = makeTableState(37);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].amount).toBe(37);
+  });
+
+  it("player all-in for less than bet → 2 pot entries (main + side)", () => {
+    // Player A bets 100, Player B all-in for 50, Player C calls 100
+    // Main pot: 50×3 = 150 (all eligible)
+    // Side pot: 50×2 = 100 (A and C eligible)
+    const players = [
+      makePlayer(0, 400, 100, "active"),  // A
+      makePlayer(1, 0, 50, "allin"),      // B all-in
+      makePlayer(2, 400, 100, "active"),  // C
+    ];
+    const ts = makeTableState(250);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(2);
+    // Main pot: everyone contributes up to 50 each = 150
+    expect(ts.pots[0].amount).toBe(150);
+    expect(ts.pots[0].eligible).toContain(0);
+    expect(ts.pots[0].eligible).toContain(1);
+    expect(ts.pots[0].eligible).toContain(2);
+    // Side pot: A and C contribute 50 more each = 100
+    expect(ts.pots[1].amount).toBe(100);
+    expect(ts.pots[1].eligible).toContain(0);
+    expect(ts.pots[1].eligible).toContain(2);
+    expect(ts.pots[1].eligible).not.toContain(1);
+    // Amounts sum to total
+    expect(ts.pots.reduce((s, p) => s + p.amount, 0)).toBe(250);
+  });
+
+  it("two players all-in at different levels → 3 pot entries", () => {
+    // A commits 200, B all-in for 50, C all-in for 120, D calls 200
+    const players = [
+      makePlayer(0, 300, 200, "active"),
+      makePlayer(1, 0, 50, "allin"),
+      makePlayer(2, 0, 120, "allin"),
+      makePlayer(3, 300, 200, "active"),
+    ];
+    const ts = makeTableState(570);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(3);
+    // Tier 1: 50×4 = 200
+    expect(ts.pots[0].amount).toBe(200);
+    expect(ts.pots[0].eligible).toHaveLength(4);
+    // Tier 2: 70×3 = 210 (B not eligible)
+    expect(ts.pots[1].amount).toBe(210);
+    expect(ts.pots[1].eligible).toHaveLength(3);
+    expect(ts.pots[1].eligible).not.toContain(1);
+    // Tier 3: 80×2 = 160 (B and C not eligible)
+    expect(ts.pots[2].amount).toBe(160);
+    expect(ts.pots[2].eligible).toHaveLength(2);
+    // Sum
+    expect(ts.pots.reduce((s, p) => s + p.amount, 0)).toBe(570);
+  });
+
+  it("all players all-in at same level → single pot", () => {
+    const players = [
+      makePlayer(0, 0, 100, "allin"),
+      makePlayer(1, 0, 100, "allin"),
+      makePlayer(2, 0, 100, "allin"),
+    ];
+    const ts = makeTableState(300);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].amount).toBe(300);
+    expect(ts.pots[0].eligible).toHaveLength(3);
+  });
+
+  it("one player all-in, rest fold → single pot", () => {
+    const players = [
+      makePlayer(0, 0, 50, "allin"),
+      makePlayer(1, 490, 10, "folded"),
+      makePlayer(2, 495, 5, "folded"),
+    ];
+    const ts = makeTableState(65);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(1);
+    expect(ts.pots[0].eligible).toContain(0);
+  });
+
+  it("short stack all-in for less than BB → correct main pot", () => {
+    // Short stack has 3 chips, BB is 5. Short stack goes all-in for 3.
+    // Other player covers. Main pot = 3+3=6. Side = 2 (excess from other player).
+    const players = [
+      makePlayer(0, 0, 3, "allin"),
+      makePlayer(1, 495, 5, "active"),
+    ];
+    const ts = makeTableState(8);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(2);
+    expect(ts.pots[0].amount).toBe(6);  // 3 from each
+    expect(ts.pots[0].eligible).toHaveLength(2);
+    expect(ts.pots[1].amount).toBe(2);  // excess from player 1
+    expect(ts.pots[1].eligible).toHaveLength(1);
+    expect(ts.pots[1].eligible).toContain(1);
+  });
+
+  it("all-in with folded player contributions included", () => {
+    // Folded player put in 10, active player put in 50, all-in player put in 30
+    const players = [
+      makePlayer(0, 450, 50, "active"),
+      makePlayer(1, 0, 30, "allin"),
+      makePlayer(2, 490, 10, "folded"),
+    ];
+    const ts = makeTableState(90);
+    PE.calculateSidePots(players, ts);
+    expect(ts.pots).toHaveLength(2);
+    // Main: min(10,30)+min(50,30)+min(30,30) = 10+30+30 = 70... no
+    // Tier at level 30: all players contribute up to 30 each
+    //   player 0: min(50,30)-0 = 30, player 1: min(30,30)-0 = 30, player 2: min(10,30)-0 = 10
+    //   total = 70, eligible = [0, 1]
+    // Tier at level 50: players above 30
+    //   player 0: min(50,50)-min(50,30) = 20, player 1: 0, player 2: 0
+    //   total = 20, eligible = [0]
+    expect(ts.pots[0].amount).toBe(70);
+    expect(ts.pots[1].amount).toBe(20);
+    expect(ts.pots.reduce((s, p) => s + p.amount, 0)).toBe(90);
+  });
+});
