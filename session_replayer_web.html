@@ -3318,30 +3318,47 @@
         return data;
       }
 
-      // Try JSON first
-      try {
-        const data = JSON.parse(text);
-        if (data && (data.hands || data.action_sequence || data.version)) {
-          startQA(applyParseScreenMeta(data));
-          return;
-        }
-      } catch (_) { /* not JSON — try shorthand */ }
+      const looksLikeJson = text[0] === "{" || text[0] === "[";
 
-      // Try shorthand parsing
-      const SL = window.ShorthandLearner;
-      if (SL) {
-        const result = SL.parseWithProfile(text, "default", {
-          blinds: session.blinds || { small: 2, big: 5 },
-          heroSeat: 1
-        });
-        if (result.hands && result.hands.length > 0) {
-          els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from text. Loading...`;
-          startQA(applyParseScreenMeta(result));
+      // Try JSON first
+      if (looksLikeJson) {
+        try {
+          const data = JSON.parse(text);
+          if (data && (data.hands || data.action_sequence || data.version)) {
+            els.parseStatus.textContent = `Detected JSON session data — loading ${(data.hands || []).length} hand(s)...`;
+            startQA(applyParseScreenMeta(data));
+            return;
+          }
+        } catch (jsonErr) {
+          // JSON-like but malformed — offer fallback
+          els.parseStatus.innerHTML = `JSON parse error: ${jsonErr.message}. ` +
+            `<button id="tryAsNotesBtn" style="margin-left:8px; padding:2px 10px; background:#446; color:#eee; border:1px solid #667; border-radius:4px; cursor:pointer;">Try as session notes instead?</button>`;
+          document.getElementById("tryAsNotesBtn").addEventListener("click", () => {
+            tryShorthandParse(text, applyParseScreenMeta);
+          });
           return;
         }
       }
 
-      els.parseStatus.textContent = "Could not parse as JSON or shorthand. Check the format and try again.";
+      // Try shorthand parsing
+      tryShorthandParse(text, applyParseScreenMeta);
+
+      function tryShorthandParse(noteText, metaFn) {
+        els.parseStatus.textContent = "Detected session notes — parsing...";
+        const SL = window.ShorthandLearner;
+        if (SL) {
+          const result = SL.parseWithProfile(noteText, "default", {
+            blinds: session.blinds || { small: 2, big: 5 },
+            heroSeat: 1
+          });
+          if (result.hands && result.hands.length > 0) {
+            els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from session notes. Loading...`;
+            startQA(metaFn(result));
+            return;
+          }
+        }
+        els.parseStatus.textContent = "Could not parse as JSON or session notes. Check the format and try again.";
+      }
     });
     els.parseBackBtn.addEventListener("click", () => showScreen("upload"));
 
