@@ -199,6 +199,7 @@
     align-items: flex-end;
     gap: 2px;
     height: 32px;
+    transition: filter 0.2s ease-out;
   }
   .pot-chip-stack {
     width: 18px;
@@ -1901,7 +1902,7 @@
       return;
     }
     const potX = feltRect.width / 2;
-    const potY = feltRect.height * 0.62;
+    const potY = feltRect.height * 0.25;
 
     // Animate all chips to pot center
     chipEls.forEach((el) => {
@@ -1909,8 +1910,12 @@
       el.style.top = potY + "px";
     });
 
-    // After animation, fade out and remove
+    // After animation, flash pot glow and fade out chips
     setTimeout(() => {
+      // Flash the pot display with a glow effect
+      els.potChips.style.filter = "brightness(1.8) drop-shadow(0 0 12px rgba(255,215,0,0.8))";
+      setTimeout(() => { els.potChips.style.filter = ""; }, 400);
+
       chipEls.forEach((el) => {
         el.style.opacity = "0";
       });
