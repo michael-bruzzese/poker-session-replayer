@@ -912,9 +912,9 @@
   <h1>Session Replayer</h1>
   <p>Upload a session file or load the demo to get started.</p>
   <div id="uploadZone" class="upload-zone">
-    <p>Drop a session file here (.json, .txt)</p>
+    <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
-    <input type="file" id="fileInput" accept=".json,.txt,.docx">
+    <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md">
   </div>
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
@@ -947,7 +947,7 @@
   </div>
   <textarea id="parseTextArea" style="width:min(90%,700px); height:300px; padding:12px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:13px; resize:vertical;" placeholder="Paste session notes or JSON here..."></textarea>
   <div style="display:flex; gap:12px; margin-top:16px;">
-    <button id="parseLoadJsonBtn" class="demo-btn">Load as JSON</button>
+    <button id="parseLoadJsonBtn" class="demo-btn">Parse &amp; Load</button>
     <button id="parseBackBtn" class="demo-btn" style="background:#555">Back</button>
   </div>
   <p id="parseStatus" style="margin-top:12px; font-size:13px; color:var(--text-muted);"></p>
@@ -2354,7 +2354,89 @@ const HoldemValidator = (() => {
       });
     }
 
+    // ---- Showdown Winner Validation ----
+    // If hand went to showdown and we know the cards for the declared winner AND at least
+    // one other player, verify the declared winner actually has the best hand.
+    const result = hand.result || {};
+    if (result.showdown && result.winner_seat && board.flop && board.flop.length === 3) {
+      const fullBoard = [...(board.flop || [])];
+      if (board.turn) fullBoard.push(board.turn);
+      if (board.river) fullBoard.push(board.river);
+
+      if (fullBoard.length === 5) {
+        // Gather all known hands: hero + villains
+        const knownHands = {};
+        if (heroCards.length === 2 && heroCards.every(c => isValidCard(c))) {
+          knownHands[hand.hero_seat] = heroCards;
+        }
+        for (const [seat, cards] of Object.entries(villainCards)) {
+          if (Array.isArray(cards) && cards.length === 2 && cards.every(c => isValidCard(c))) {
+            knownHands[parseInt(seat)] = cards;
+          }
+        }
+
+        // Only validate if we know the winner's hand AND at least one opponent's hand
+        const winnerSeat = result.winner_seat;
+        if (knownHands[winnerSeat] && Object.keys(knownHands).length >= 2) {
+          const winnerRank = evaluateHoldemHand(knownHands[winnerSeat], fullBoard);
+          let actualBestSeat = winnerSeat;
+          let actualBestRank = winnerRank;
+
+          for (const [seat, holeCards] of Object.entries(knownHands)) {
+            const s = parseInt(seat);
+            if (s === winnerSeat) continue;
+            const rank = evaluateHoldemHand(holeCards, fullBoard);
+            if (compareHandRanks(rank, actualBestRank) > 0) {
+              actualBestSeat = s;
+              actualBestRank = rank;
+            }
+          }
+
+          if (actualBestSeat !== winnerSeat) {
+            const winnerDesc = describeHandRank(winnerRank);
+            const actualDesc = describeHandRank(actualBestRank);
+            errors.push({
+              severity: "error",
+              field: "result.winner_seat",
+              message: `Declared winner seat ${winnerSeat} (${winnerDesc}) loses to seat ${actualBestSeat} (${actualDesc})`,
+              question: `Hand ${hid}: The result says seat ${winnerSeat} wins, but seat ${actualBestSeat} has a better hand (${actualDesc} vs ${winnerDesc}). Which seat actually won?`
+            });
+          }
+        }
+      }
+    }
+
     return errors;
+  }
+
+  // ---- Action Order Helpers ----
+
+  /**
+   * Build the expected action order (array of seat numbers) for a given street.
+   * Preflop: starts UTG (seat after BB), wraps clockwise, BB acts last.
+   * Postflop: starts SB (seat after BTN), wraps clockwise, BTN acts last.
+   * Only includes seats in `activeSeats` (not folded, not all-in).
+   */
+  function buildExpectedOrder(buttonSeat, seatCount, street, activeSeats) {
+    // Find SB and BB seats (clockwise from button)
+    const sbSeat = ((buttonSeat - 1 + 1) % seatCount) + 1; // seat after button
+    const bbSeat = ((buttonSeat - 1 + 2) % seatCount) + 1; // seat after SB
+
+    let startSeat;
+    if (street === "preflop") {
+      // UTG = seat after BB
+      startSeat = ((bbSeat - 1 + 1) % seatCount) + 1;
+    } else {
+      // Postflop: start at SB (first seat after button)
+      startSeat = sbSeat;
+    }
+
+    const order = [];
+    for (let i = 0; i < seatCount; i++) {
+      const seat = ((startSeat - 1 + i) % seatCount) + 1;
+      if (activeSeats.has(seat)) order.push(seat);
+    }
+    return order;
   }
 
   // ---- Street Action Validation ----
@@ -2375,40 +2457,63 @@ const HoldemValidator = (() => {
     const seatsActed = new Set();
     const bigBlind = (hand.blinds || {}).big || 10;
 
-    // ---- Preflop action order validation ----
-    // First actor preflop should be UTG (seat after BB), not SB or BB
-    if (street === "preflop" && actions.length > 0) {
-      const firstActor = actions[0];
-      if (firstActor.position === "BB") {
-        errors.push({
-          severity: "error",
-          field: `${street}.actions[0]`,
-          message: `BB acts first preflop — UTG should act first`,
-          question: `Hand ${hid}, preflop: The big blind is listed as acting first. Preflop action starts with UTG (under the gun), not BB. Is the action order correct?`
-        });
-      } else if (firstActor.position === "SB") {
-        errors.push({
-          severity: "error",
-          field: `${street}.actions[0]`,
-          message: `SB acts first preflop — UTG should act first`,
-          question: `Hand ${hid}, preflop: The small blind is listed as acting first. Preflop action starts with UTG, then continues clockwise to the blinds. Is the action order correct?`
-        });
-      }
-    }
+    // ---- Full action order validation ----
+    // Build the set of active seats (those that have at least one action this hand)
+    // and validate that actions follow the correct clockwise order.
+    if (hand.button_seat && actions.length > 1) {
+      // Collect seats that participate in this street's action from the actions themselves
+      const streetSeats = new Set(actions.map(a => a.seat).filter(s => s >= 1 && s <= seatCount));
 
-    // ---- Postflop action order validation ----
-    // First actor postflop should be earliest position still in hand (SB first, then BB, etc.)
-    if (street !== "preflop" && actions.length > 0) {
-      const firstActor = actions[0];
-      const btnSeat = hand.button_seat;
-      // The first actor should NOT be the button (last to act postflop) unless heads-up IP
-      if (firstActor.position === "BTN" && actions.length > 1) {
-        errors.push({
-          severity: "warning",
-          field: `${street}.actions[0]`,
-          message: `Button acts first on ${street} — typically the earliest position acts first postflop`,
-          question: `Hand ${hid}, ${street}: The button is listed as acting first. Usually the earliest position (SB/BB/UTG etc.) acts first after the flop. Is this correct?`
-        });
+      // For streets after preflop, we need to know who folded on earlier streets
+      const priorFolded = new Set();
+      const priorAllIn = new Set();
+      if (street !== "preflop") {
+        for (const priorBlock of (hand.action_sequence || [])) {
+          if (priorBlock.street === street) break;
+          for (const act of (priorBlock.actions || [])) {
+            if (act.action === "fold") priorFolded.add(act.seat);
+            if (act.action === "all-in") priorAllIn.add(act.seat);
+          }
+        }
+      }
+
+      // Active seats = participants minus prior folds/all-ins
+      const activeSeats = new Set([...streetSeats].filter(s => !priorFolded.has(s) && !priorAllIn.has(s)));
+
+      if (activeSeats.size > 1) {
+        const expectedOrder = buildExpectedOrder(hand.button_seat, seatCount, street, activeSeats);
+
+        // Walk through actions and check the first occurrence of each seat matches the expected order
+        const firstActionOrder = [];
+        const seenInOrder = new Set();
+        for (const action of actions) {
+          if (!seenInOrder.has(action.seat) && activeSeats.has(action.seat)) {
+            firstActionOrder.push(action.seat);
+            seenInOrder.add(action.seat);
+          }
+        }
+
+        // Compare first-action order against expected order
+        // (only compare seats that appear in both lists)
+        const expectedFiltered = expectedOrder.filter(s => seenInOrder.has(s));
+        for (let i = 0; i < firstActionOrder.length && i < expectedFiltered.length; i++) {
+          if (firstActionOrder[i] !== expectedFiltered[i]) {
+            // Find position labels for better error messages
+            const actualSeat = firstActionOrder[i];
+            const expectedSeat = expectedFiltered[i];
+            const actualPos = actions.find(a => a.seat === actualSeat)?.position || `Seat ${actualSeat}`;
+            const expectedPos = actions.find(a => a.seat === expectedSeat)?.position || `Seat ${expectedSeat}`;
+            const streetLabel = street === "preflop" ? "Preflop" : street.charAt(0).toUpperCase() + street.slice(1);
+
+            errors.push({
+              severity: "error",
+              field: `${street}.action_order`,
+              message: `${streetLabel} action out of order: ${actualPos} (seat ${actualSeat}) acts before ${expectedPos} (seat ${expectedSeat})`,
+              question: `Hand ${hid}, ${street}: ${actualPos} acts before ${expectedPos}, but ${expectedPos} should act first. Is the action order correct, or is there a transcription error?`
+            });
+            break; // one order error per street is enough to flag it
+          }
+        }
       }
     }
 
@@ -2626,6 +2731,103 @@ const HoldemValidator = (() => {
     return allErrors;
   }
 
+  // ---- Hand Evaluation (for showdown validation) ----
+
+  const RANK_VALUES = { "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "T": 10, "J": 11, "Q": 12, "K": 13, "A": 14 };
+  const HAND_CATEGORIES = [
+    "high card", "pair", "two pair", "three of a kind",
+    "straight", "flush", "full house", "four of a kind", "straight flush"
+  ];
+
+  function cardRank(code) { return RANK_VALUES[code[0].toUpperCase()] || 0; }
+  function cardSuit(code) { return code[1].toLowerCase(); }
+
+  /**
+   * Evaluate the best 5-card hand from 2 hole cards + 5 board cards.
+   * Returns { category: 0-8, kickers: [sorted values] } for comparison.
+   */
+  function evaluateHoldemHand(holeCards, board) {
+    const all7 = [...holeCards, ...board];
+    let best = null;
+    // Check all C(7,5) = 21 combinations
+    for (let i = 0; i < 7; i++) {
+      for (let j = i + 1; j < 7; j++) {
+        // Exclude cards i and j (pick the other 5)
+        const hand5 = all7.filter((_, idx) => idx !== i && idx !== j);
+        const rank = evaluate5(hand5);
+        if (!best || compareHandRanks(rank, best) > 0) {
+          best = rank;
+        }
+      }
+    }
+    return best;
+  }
+
+  function evaluate5(cards) {
+    const ranks = cards.map(c => cardRank(c)).sort((a, b) => b - a);
+    const suits = cards.map(c => cardSuit(c));
+    const isFlush = suits.every(s => s === suits[0]);
+
+    // Check straight (including A-2-3-4-5 wheel)
+    let isStraight = false;
+    let straightHigh = 0;
+    if (ranks[0] - ranks[4] === 4 && new Set(ranks).size === 5) {
+      isStraight = true;
+      straightHigh = ranks[0];
+    }
+    // Wheel: A-5-4-3-2
+    if (ranks[0] === 14 && ranks[1] === 5 && ranks[2] === 4 && ranks[3] === 3 && ranks[4] === 2) {
+      isStraight = true;
+      straightHigh = 5; // 5-high straight
+    }
+
+    // Count rank frequencies
+    const freq = {};
+    for (const r of ranks) freq[r] = (freq[r] || 0) + 1;
+    const groups = Object.entries(freq).map(([r, c]) => ({ rank: parseInt(r), count: c }));
+    groups.sort((a, b) => b.count - a.count || b.rank - a.rank);
+
+    if (isFlush && isStraight) return { category: 8, kickers: [straightHigh] };
+    if (groups[0].count === 4) return { category: 7, kickers: [groups[0].rank, groups[1].rank] };
+    if (groups[0].count === 3 && groups[1].count === 2) return { category: 6, kickers: [groups[0].rank, groups[1].rank] };
+    if (isFlush) return { category: 5, kickers: ranks };
+    if (isStraight) return { category: 4, kickers: [straightHigh] };
+    if (groups[0].count === 3) return { category: 3, kickers: [groups[0].rank, ...groups.slice(1).map(g => g.rank)] };
+    if (groups[0].count === 2 && groups[1].count === 2) {
+      const pairs = [groups[0].rank, groups[1].rank].sort((a, b) => b - a);
+      return { category: 2, kickers: [...pairs, groups[2].rank] };
+    }
+    if (groups[0].count === 2) return { category: 1, kickers: [groups[0].rank, ...groups.slice(1).map(g => g.rank)] };
+    return { category: 0, kickers: ranks };
+  }
+
+  /**
+   * Compare two hand ranks. Returns >0 if a beats b, <0 if b beats a, 0 if tied.
+   */
+  function compareHandRanks(a, b) {
+    if (a.category !== b.category) return a.category - b.category;
+    for (let i = 0; i < Math.max(a.kickers.length, b.kickers.length); i++) {
+      const ak = a.kickers[i] || 0;
+      const bk = b.kickers[i] || 0;
+      if (ak !== bk) return ak - bk;
+    }
+    return 0;
+  }
+
+  function describeHandRank(rank) {
+    const catName = HAND_CATEGORIES[rank.category] || "unknown";
+    const rankName = (v) => {
+      const names = { 14: "ace", 13: "king", 12: "queen", 11: "jack", 10: "ten" };
+      return names[v] || String(v);
+    };
+    if (rank.category >= 4) return catName + ", " + rankName(rank.kickers[0]) + " high";
+    if (rank.category === 3 || rank.category === 1) return catName + " of " + rankName(rank.kickers[0]) + "s";
+    if (rank.category === 2) return "two pair, " + rankName(rank.kickers[0]) + "s and " + rankName(rank.kickers[1]) + "s";
+    if (rank.category === 7) return "four " + rankName(rank.kickers[0]) + "s";
+    if (rank.category === 6) return rankName(rank.kickers[0]) + "s full of " + rankName(rank.kickers[1]) + "s";
+    return catName + ", " + rankName(rank.kickers[0]) + " high";
+  }
+
   // ---- Helper ----
 
   function cardName(code) {
@@ -2637,13 +2839,139 @@ const HoldemValidator = (() => {
     return `${rankNames[rank] || rank} of ${suitNames[suit] || suit}`;
   }
 
+  // ---- Implicit Action Inference ----
+
+  /**
+   * Fill in implied checks that the user didn't record.
+   * Mutates the hand object in place. Returns a list of inferred actions for logging.
+   *
+   * Rules:
+   * 1. Postflop: if a street's first action is a bet/raise but there are active players
+   *    who should have acted before the bettor (based on button_seat), insert checks for them.
+   * 2. Preflop BB option: if action reaches BB with no raise beyond the big blind,
+   *    and BB doesn't have an explicit action, insert a check (BB exercises option).
+   */
+  function inferImpliedActions(hand, seatCount) {
+    seatCount = seatCount || 9;
+    const inferred = [];
+    const buttonSeat = hand.button_seat;
+    if (!buttonSeat) return inferred;
+
+    // Track folds and all-ins across streets
+    const globalFolded = new Set();
+    const globalAllIn = new Set();
+
+    for (const streetBlock of (hand.action_sequence || [])) {
+      const street = streetBlock.street;
+      const actions = streetBlock.actions || [];
+      if (!actions.length) continue;
+
+      if (street !== "preflop") {
+        // Determine active seats (not folded, not all-in) at the start of this street
+        const activeSeats = new Set();
+        // Collect all seats that participate in this hand (appeared in any action)
+        for (const sb of (hand.action_sequence || [])) {
+          for (const a of (sb.actions || [])) {
+            if (a.seat >= 1 && a.seat <= seatCount) activeSeats.add(a.seat);
+          }
+        }
+        // Remove folded and all-in players
+        for (const s of globalFolded) activeSeats.delete(s);
+        for (const s of globalAllIn) activeSeats.delete(s);
+
+        if (activeSeats.size > 1) {
+          // Build expected postflop order
+          const sbSeat = ((buttonSeat - 1 + 1) % seatCount) + 1;
+          const order = [];
+          for (let i = 0; i < seatCount; i++) {
+            const seat = ((sbSeat - 1 + i) % seatCount) + 1;
+            if (activeSeats.has(seat)) order.push(seat);
+          }
+
+          // Find the first recorded action's seat
+          const firstActionSeat = actions[0].seat;
+          const firstActionIdx = order.indexOf(firstActionSeat);
+          const firstAction = (actions[0].action || "").toLowerCase();
+
+          // If the first action is a bet/raise and there are players before this seat,
+          // they must have checked
+          if (firstActionIdx > 0 && (firstAction === "bet" || firstAction === "raise")) {
+            const checksToInsert = [];
+            for (let i = 0; i < firstActionIdx; i++) {
+              const seat = order[i];
+              // Find this seat's position label from any action in the hand
+              let position = "?";
+              for (const sb of (hand.action_sequence || [])) {
+                const found = (sb.actions || []).find(a => a.seat === seat);
+                if (found && found.position) { position = found.position; break; }
+              }
+              checksToInsert.push({
+                seat,
+                position,
+                action: "check",
+                _inferred: true
+              });
+              inferred.push({ street, seat, position, action: "check" });
+            }
+            // Insert at the beginning
+            streetBlock.actions = [...checksToInsert, ...actions];
+          }
+        }
+      }
+
+      // Preflop: check if BB option should be inferred
+      if (street === "preflop") {
+        const bbSeat = ((buttonSeat - 1 + 2) % seatCount) + 1;
+        const bigBlind = (hand.blinds || {}).big || 5;
+        // Check if action reaches BB with no raise above BB
+        let maxBet = bigBlind;
+        let bbActed = false;
+        for (const a of actions) {
+          if (a.seat === bbSeat) bbActed = true;
+          const amt = a.amount || 0;
+          if ((a.action === "raise" || a.action === "all-in") && amt > maxBet) maxBet = amt;
+        }
+
+        // If everyone limped/folded to BB and BB never explicitly acted,
+        // and the hand continues to a flop, BB checked (option)
+        if (!bbActed && maxBet <= bigBlind && !globalFolded.has(bbSeat)) {
+          const hasPostflop = (hand.action_sequence || []).some(sb => sb.street !== "preflop");
+          if (hasPostflop) {
+            let bbPosition = "BB";
+            const bbAction = actions.find(a => a.seat === bbSeat);
+            if (bbAction && bbAction.position) bbPosition = bbAction.position;
+            streetBlock.actions.push({
+              seat: bbSeat,
+              position: bbPosition,
+              action: "check",
+              _inferred: true
+            });
+            inferred.push({ street: "preflop", seat: bbSeat, position: bbPosition, action: "check (BB option)" });
+          }
+        }
+      }
+
+      // Update global fold/all-in tracking for subsequent streets
+      for (const a of (streetBlock.actions || [])) {
+        if (a.action === "fold") globalFolded.add(a.seat);
+        if (a.action === "all-in") globalAllIn.add(a.seat);
+      }
+    }
+
+    return inferred;
+  }
+
   return {
     isValidCard,
     normalizeCard,
     findDuplicateCards,
     validateHand,
     validateStreetActions,
-    validateSession
+    validateSession,
+    evaluateHoldemHand,
+    compareHandRanks,
+    describeHandRank,
+    inferImpliedActions
   };
 })();
 
@@ -2670,6 +2998,64 @@ const ShorthandLearner = (() => {
   "use strict";
 
   const STORAGE_KEY = "sessionReplayerShorthandProfiles";
+
+  // ---- Fuzzy Matching (Levenshtein distance) ----
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+    return matrix[b.length][a.length];
+  }
+
+  /**
+   * Fuzzy lookup: find the best match in a dictionary when exact match fails.
+   * Only matches if the edit distance is <= maxDist AND the token is long enough
+   * (short tokens like "f", "x", "c" must match exactly to avoid false positives).
+   * Returns { key, value, distance } or null if no close match found.
+   */
+  // Words that look like poker terms but are NOT actions — skip fuzzy matching
+  const FUZZY_IGNORE = new Set([
+    "stacks", "stack", "chips", "hands", "hand", "board", "cards", "card",
+    "seats", "seat", "table", "blinds", "blind", "antes", "ante",
+    "dealer", "player", "players", "hero", "villain", "flop", "turn",
+    "river", "preflop", "showdown", "pot", "pots", "wins", "loses",
+    "with", "from", "into", "over", "about", "around", "through",
+    "folds", "checks", "calls", "bets", "raises" // these are exact matches, not fuzzy
+  ]);
+
+  function fuzzyLookup(token, dict, maxDist) {
+    if (!maxDist) maxDist = 2;
+    // Don't fuzzy-match tokens shorter than 4 chars — too ambiguous
+    if (token.length < 4) return null;
+    // Skip known non-action words
+    if (FUZZY_IGNORE.has(token)) return null;
+    let best = null;
+    for (const key of Object.keys(dict)) {
+      if (key.length < 4) continue; // skip short keys too
+      // Require first character to match — most typos don't change the first letter
+      if (token[0] !== key[0]) continue;
+      const dist = levenshtein(token, key);
+      // Only allow distance 1 for all words — distance 2 causes too many false positives
+      if (dist === 1 && (!best || dist < best.distance)) {
+        best = { key, value: dict[key], distance: dist };
+      }
+    }
+    return best;
+  }
 
   // ---- Default patterns ----
 
@@ -3293,6 +3679,18 @@ const ShorthandLearner = (() => {
       if (hand) hands.push(hand);
     });
 
+    // Persist any typos learned via fuzzy matching into the profile for next time
+    if (profile._learnedTypos && Object.keys(profile._learnedTypos).length > 0) {
+      const profiles = loadProfiles();
+      const stored = profiles[profileName || "default"] || {};
+      if (!stored.actions) stored.actions = {};
+      for (const [typo, canonical] of Object.entries(profile._learnedTypos)) {
+        stored.actions[typo] = canonical;
+      }
+      profiles[profileName || "default"] = stored;
+      saveProfiles(profiles);
+    }
+
     return {
       version: 2,
       app: "session-replayer",
@@ -3304,7 +3702,8 @@ const ShorthandLearner = (() => {
       flags: {
         has_unresolved_ambiguities: hands.some(h => h.warnings && h.warnings.length),
         confirmed_by_user: false,
-        parsed_with_profile: profileName || "default"
+        parsed_with_profile: profileName || "default",
+        fuzzy_corrections: profile._learnedTypos || {}
       }
     };
   }
@@ -3398,41 +3797,7 @@ const ShorthandLearner = (() => {
     const handNames = { ...DEFAULT_PATTERNS.handNames, ...(profile.handNames || {}) };
     const lower = text.toLowerCase();
 
-    // Check for "AKs" / "AKo" / "JTs" style notation (rank+rank+suited/offsuit)
-    const rankedHandRegex = /\b([AKQJT2-9])([AKQJT2-9])([so])\b/gi;
-    let rankedMatch;
-    while ((rankedMatch = rankedHandRegex.exec(text)) !== null) {
-      const r1 = rankedMatch[1].toUpperCase();
-      const r2 = rankedMatch[2].toUpperCase();
-      const isSuited = rankedMatch[3].toLowerCase() === "s";
-      if (isSuited) {
-        result.hero = [r1 + "s", r2 + "s"];
-      } else {
-        result.hero = [r1 + "h", r2 + "d"];
-      }
-      break;
-    }
-
-    // Check for hand name shortcuts ("pocket aces", "big slick", "AK suited")
-    if (!result.hero.length) for (const [name, rankPair] of Object.entries(handNames)) {
-      // Match whole words only (avoid "button" matching "tt", "the" matching "th")
-      const nameRegex = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
-      if (nameRegex.test(lower)) {
-        // Assign default suits if needed
-        const suited = lower.includes("suited") || lower.includes("suit");
-        if (rankPair[0] === rankPair[1]) {
-          // Pocket pair — assign different suits
-          result.hero = [rankPair[0] + "s", rankPair[1] + "h"];
-        } else if (suited) {
-          result.hero = [rankPair[0] + "s", rankPair[1] + "s"];
-        } else {
-          result.hero = [rankPair[0] + "h", rankPair[1] + "d"];
-        }
-        break;
-      }
-    }
-
-    // Standard card codes: Ah, Ks, Td, 9c
+    // Standard card codes first: Ah, Ks, Td, 9c — these take priority over hand names
     const codeRegex = /\b([AKQJT2-9])([shdc])\b/gi;
     let m;
     const codedCards = [];
@@ -3486,9 +3851,40 @@ const ShorthandLearner = (() => {
 
     result.all = codedCards;
 
-    // If we didn't get hero cards from hand names, use first 2 coded cards
-    if (!result.hero.length && codedCards.length >= 2) {
+    // Assign hero cards: prefer explicit card codes, then ranked hand, then hand names
+    if (codedCards.length >= 2) {
       result.hero = codedCards.slice(0, 2);
+    }
+
+    // Fallback: "AKs" / "AKo" / "JTs" style notation (rank+rank+suited/offsuit)
+    if (!result.hero.length) {
+      const rankedHandRegex = /\b([AKQJT2-9])([AKQJT2-9])([so])\b/gi;
+      let rankedMatch;
+      while ((rankedMatch = rankedHandRegex.exec(text)) !== null) {
+        const r1 = rankedMatch[1].toUpperCase();
+        const r2 = rankedMatch[2].toUpperCase();
+        const isSuited = rankedMatch[3].toLowerCase() === "s";
+        result.hero = isSuited ? [r1 + "s", r2 + "s"] : [r1 + "h", r2 + "d"];
+        break;
+      }
+    }
+
+    // Fallback: hand name shortcuts ("pocket aces", "big slick")
+    if (!result.hero.length) {
+      for (const [name, rankPair] of Object.entries(handNames)) {
+        const nameRegex = new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+        if (nameRegex.test(lower)) {
+          const suited = lower.includes("suited") || lower.includes("suit");
+          if (rankPair[0] === rankPair[1]) {
+            result.hero = [rankPair[0] + "s", rankPair[1] + "h"];
+          } else if (suited) {
+            result.hero = [rankPair[0] + "s", rankPair[1] + "s"];
+          } else {
+            result.hero = [rankPair[0] + "h", rankPair[1] + "d"];
+          }
+          break;
+        }
+      }
     }
 
     // Find board cards by street markers
@@ -3621,6 +4017,27 @@ const ShorthandLearner = (() => {
             i += 2;
             continue;
           }
+        }
+
+        // Fuzzy fallback: if token looks like a typo of a known action, use it
+        // and learn the typo for next time so it becomes an exact match.
+        const fuzzyAction = fuzzyLookup(token, actions);
+        if (fuzzyAction) {
+          // Persist the typo → canonical mapping into the actions dict for this parse
+          actions[token] = fuzzyAction.value;
+          // Also queue it for profile learning (stored at end of parse)
+          if (!profile._learnedTypos) profile._learnedTypos = {};
+          profile._learnedTypos[token] = fuzzyAction.value;
+
+          const actor = findActorBefore(tokens, i, positions, heroAliases, villainAliases, playerTracker);
+          const entry = { seat: actor.seat, position: actor.position, action: fuzzyAction.value, _fuzzy: token };
+          const amount = extractAmountFromTokens(tokens, i, bb);
+          if (amount > 0 && fuzzyAction.value !== "fold" && fuzzyAction.value !== "check") {
+            entry.amount = amount;
+          }
+          streetActions[currentStreet].push(entry);
+          i++;
+          continue;
         }
 
         i++;
@@ -3768,7 +4185,9 @@ const ShorthandLearner = (() => {
     extractAllCards,
     extractCardsFlexible,
     extractAmount,
-    alignByCardOverlap
+    alignByCardOverlap,
+    levenshtein,
+    fuzzyLookup
   };
 })();
 
@@ -4238,11 +4657,11 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
     els.btnBackToScript.style.display = inBranch ? "" : "none";
 
-    // New Turn / New River — show on relevant streets. Repeatable in branch mode.
-    const onFlop = playback.currentStreet === "flop";
-    const onTurn = playback.currentStreet === "turn";
-    els.btnNewTurn.style.display = (onFlop || (onTurn && inBranch)) ? "" : "none";
-    els.btnNewRiver.style.display = (onTurn || (playback.currentStreet === "river" && inBranch)) ? "" : "none";
+    // New Turn / New River — only available AFTER the card is on the board (to replace it).
+    const hasTurnCard = playback.board.length >= 4;
+    const hasRiverCard = playback.board.length >= 5;
+    els.btnNewTurn.style.display = hasTurnCard ? "" : "none";
+    els.btnNewRiver.style.display = hasRiverCard ? "" : "none";
 
     // Script mode acting prompt: show upcoming action hint
     if (inScript && !inBranch) {
@@ -4568,6 +4987,27 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     session.players = data.players || {};
     session.blinds = data.blinds || { small: 5, big: 10 };
 
+    // Ensure hero seat is always labeled "Hero"
+    const heroSeat = (session.hands[0] || {}).hero_seat || 1;
+    if (!session.players[heroSeat]) {
+      session.players[heroSeat] = { name: "Hero", description: "Our seat", is_hero: true };
+    } else {
+      const p = session.players[heroSeat];
+      if (p.name && p.name !== "Hero" && !p.is_hero) {
+        p.description = p.name + (p.description ? " — " + p.description : "");
+      }
+      p.name = "Hero";
+      p.is_hero = true;
+    }
+
+    // Run implicit action inference
+    const HV = window.HoldemValidator;
+    if (HV && HV.inferImpliedActions) {
+      for (const hand of session.hands) {
+        HV.inferImpliedActions(hand, SEAT_COUNT);
+      }
+    }
+
     // Auto-save for crash recovery
     saveSessionToStorage(data);
 
@@ -4682,12 +5122,18 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       });
     }
 
-    // Build player names (convert 1-based keys to 0-based)
+    // Build player names with 1-based keys (engine looks up [seat+1] first)
+    // Hero seat always displays as "Hero"
     const playerNames = {};
     for (let s = 0; s < SEAT_COUNT; s += 1) {
-      const sessionPlayer = session.players[s + 1] || session.players[s];
+      const seatKey = s + 1; // 1-based key for engine lookup
+      const sessionPlayer = session.players[seatKey];
       if (sessionPlayer) {
-        playerNames[s] = { name: sessionPlayer.name || `Seat ${s + 1}`, description: sessionPlayer.description || "" };
+        const isHero = s === heroSeat;
+        playerNames[seatKey] = {
+          name: isHero ? "Hero" : (sessionPlayer.name || `Seat ${seatKey}`),
+          description: sessionPlayer.description || ""
+        };
       }
     }
 
@@ -4943,8 +5389,15 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
 
     const playerNames = {};
     for (let s = 0; s < SEAT_COUNT; s += 1) {
-      const sp = session.players[s + 1] || session.players[s];
-      if (sp) playerNames[s] = { name: sp.name, description: sp.description || "" };
+      const seatKey = s + 1;
+      const sp = session.players[seatKey];
+      if (sp) {
+        const isHero = s === heroSeat;
+        playerNames[seatKey] = {
+          name: isHero ? "Hero" : (sp.name || `Seat ${seatKey}`),
+          description: sp.description || ""
+        };
+      }
     }
 
     const init = PE.initializeHand({
@@ -5461,8 +5914,15 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   function startQA(sessionData) {
     qaState.sessionData = sessionData;
 
-    // Run Hold'em rules validation first
+    // Run implicit action inference before validation
     const HV = window.HoldemValidator;
+    if (HV && HV.inferImpliedActions) {
+      for (const hand of (sessionData.hands || [])) {
+        HV.inferImpliedActions(hand, SEAT_COUNT);
+      }
+    }
+
+    // Run Hold'em rules validation
     let questions = [];
     if (HV) {
       const violations = HV.validateSession(sessionData);
@@ -5785,12 +6245,31 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     els.parseLoadJsonBtn.addEventListener("click", () => {
       const text = els.parseTextArea.value.trim();
       if (!text) { els.parseStatus.textContent = "Paste session data first."; return; }
+
+      // Try JSON first
       try {
         const data = JSON.parse(text);
-        startQA(data);
-      } catch (e) {
-        els.parseStatus.textContent = "Not valid JSON. Use parse_session.py to convert text notes to JSON first.";
+        if (data && (data.hands || data.action_sequence || data.version)) {
+          startQA(data);
+          return;
+        }
+      } catch (_) { /* not JSON — try shorthand */ }
+
+      // Try shorthand parsing
+      const SL = window.ShorthandLearner;
+      if (SL) {
+        const result = SL.parseWithProfile(text, "default", {
+          blinds: session.blinds || { small: 2, big: 5 },
+          heroSeat: 1
+        });
+        if (result.hands && result.hands.length > 0) {
+          els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from text. Loading...`;
+          startQA(result);
+          return;
+        }
       }
+
+      els.parseStatus.textContent = "Could not parse as JSON or shorthand. Check the format and try again.";
     });
     els.parseBackBtn.addEventListener("click", () => showScreen("upload"));
 
@@ -5972,30 +6451,41 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   }
 
   function handleFile(file) {
-    const name = file.name.toLowerCase();
     const reader = new FileReader();
 
-    if (name.endsWith(".json")) {
-      reader.onload = () => {
-        try {
-          const data = JSON.parse(reader.result);
+    reader.onload = () => {
+      const text = reader.result;
+
+      // Try JSON first (regardless of extension)
+      try {
+        const data = JSON.parse(text);
+        if (data && (data.hands || data.action_sequence || data.version)) {
           startQA(data);
-        } catch (err) {
-          window.alert("Failed to parse JSON: " + err.message);
+          return;
         }
-      };
-      reader.readAsText(file);
-    } else if (name.endsWith(".txt") || name.endsWith(".docx")) {
-      reader.onload = () => {
-        // Show in parse screen for manual review
-        els.parseTextArea.value = reader.result;
-        els.parseStatus.textContent = `Loaded ${file.name} (${reader.result.length} chars). To parse with AI, run: python3 parse_session.py "${file.name}" -o session.json`;
-        showScreen("parse");
-      };
-      reader.readAsText(file);
-    } else {
-      window.alert("Supported formats: .json, .txt, .docx");
-    }
+      } catch (_) { /* not JSON, continue */ }
+
+      // Parse as shorthand text using ShorthandLearner
+      const SL = window.ShorthandLearner;
+      if (SL) {
+        const result = SL.parseWithProfile(text, "default", {
+          blinds: session.blinds || { small: 2, big: 5 },
+          heroSeat: 1,
+          sessionName: file.name.replace(/\.[^.]+$/, "")
+        });
+        if (result.hands && result.hands.length > 0) {
+          startQA(result);
+          return;
+        }
+      }
+
+      // Fallback: show in parse screen for manual review
+      els.parseTextArea.value = text;
+      els.parseStatus.textContent = `Loaded ${file.name} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
+      showScreen("parse");
+    };
+
+    reader.readAsText(file);
   }
 
   // ---- Init ----
@@ -6003,17 +6493,24 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   createSeatElements();
   setupEvents();
 
-  // Check for saved session
+  // Check for saved session — small dismissible link, doesn't block new uploads
   const saved = loadSessionFromStorage();
   if (saved && saved.hands && saved.hands.length) {
-    // Show resume option
-    const resumeBtn = document.createElement("button");
-    resumeBtn.className = "demo-btn";
-    resumeBtn.style.background = "#444";
-    resumeBtn.style.marginTop = "8px";
-    resumeBtn.textContent = `Resume: ${saved.session_name || "Last Session"} (${saved.hands.length} hands)`;
-    resumeBtn.addEventListener("click", () => loadSession(saved));
-    els.uploadZone.parentElement.insertBefore(resumeBtn, els.uploadZone.nextSibling);
+    const resumeRow = document.createElement("div");
+    resumeRow.style.cssText = "display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; font-size:12px; color:var(--text-muted);";
+    const resumeLink = document.createElement("a");
+    resumeLink.href = "#";
+    resumeLink.style.cssText = "color:var(--btn-primary); text-decoration:underline; cursor:pointer;";
+    resumeLink.textContent = `Resume "${saved.session_name || "Last Session"}" (${saved.hands.length} hands)`;
+    resumeLink.addEventListener("click", (e) => { e.preventDefault(); loadSession(saved); });
+    const dismissBtn = document.createElement("span");
+    dismissBtn.style.cssText = "cursor:pointer; opacity:0.5; font-size:14px;";
+    dismissBtn.textContent = "\u2715";
+    dismissBtn.title = "Dismiss";
+    dismissBtn.addEventListener("click", () => resumeRow.remove());
+    resumeRow.appendChild(resumeLink);
+    resumeRow.appendChild(dismissBtn);
+    els.uploadZone.parentElement.insertBefore(resumeRow, els.uploadZone.nextSibling);
   }
 
   showScreen("upload");

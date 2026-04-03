@@ -912,9 +912,9 @@
   <h1>Session Replayer</h1>
   <p>Upload a session file or load the demo to get started.</p>
   <div id="uploadZone" class="upload-zone">
-    <p>Drop a session file here (.json, .txt)</p>
+    <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
-    <input type="file" id="fileInput" accept=".json,.txt,.docx">
+    <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md">
   </div>
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
@@ -947,7 +947,7 @@
   </div>
   <textarea id="parseTextArea" style="width:min(90%,700px); height:300px; padding:12px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:13px; resize:vertical;" placeholder="Paste session notes or JSON here..."></textarea>
   <div style="display:flex; gap:12px; margin-top:16px;">
-    <button id="parseLoadJsonBtn" class="demo-btn">Load as JSON</button>
+    <button id="parseLoadJsonBtn" class="demo-btn">Parse &amp; Load</button>
     <button id="parseBackBtn" class="demo-btn" style="background:#555">Back</button>
   </div>
   <p id="parseStatus" style="margin-top:12px; font-size:13px; color:var(--text-muted);"></p>
@@ -1159,7 +1159,13 @@
   </div>
 </div>
 
-<!-- SHARED_ENGINE -->
+<!-- SHARED_ENGINE_START (build script replaces this entire block with inlined JS) -->
+<script src="shared/constants.js"></script>
+<script src="shared/card_utils.js"></script>
+<script src="shared/table_engine.js"></script>
+<script src="shared/holdem_validator.js"></script>
+<script src="shared/shorthand_learner.js"></script>
+<!-- SHARED_ENGINE_END -->
 <script>
 /* ============================================================
    SESSION REPLAYER — Application Logic
@@ -1622,11 +1628,11 @@
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
     els.btnBackToScript.style.display = inBranch ? "" : "none";
 
-    // New Turn / New River — show on relevant streets. Repeatable in branch mode.
-    const onFlop = playback.currentStreet === "flop";
-    const onTurn = playback.currentStreet === "turn";
-    els.btnNewTurn.style.display = (onFlop || (onTurn && inBranch)) ? "" : "none";
-    els.btnNewRiver.style.display = (onTurn || (playback.currentStreet === "river" && inBranch)) ? "" : "none";
+    // New Turn / New River — only available AFTER the card is on the board (to replace it).
+    const hasTurnCard = playback.board.length >= 4;
+    const hasRiverCard = playback.board.length >= 5;
+    els.btnNewTurn.style.display = hasTurnCard ? "" : "none";
+    els.btnNewRiver.style.display = hasRiverCard ? "" : "none";
 
     // Script mode acting prompt: show upcoming action hint
     if (inScript && !inBranch) {
@@ -1952,6 +1958,27 @@
     session.players = data.players || {};
     session.blinds = data.blinds || { small: 5, big: 10 };
 
+    // Ensure hero seat is always labeled "Hero"
+    const heroSeat = (session.hands[0] || {}).hero_seat || 1;
+    if (!session.players[heroSeat]) {
+      session.players[heroSeat] = { name: "Hero", description: "Our seat", is_hero: true };
+    } else {
+      const p = session.players[heroSeat];
+      if (p.name && p.name !== "Hero" && !p.is_hero) {
+        p.description = p.name + (p.description ? " — " + p.description : "");
+      }
+      p.name = "Hero";
+      p.is_hero = true;
+    }
+
+    // Run implicit action inference
+    const HV = window.HoldemValidator;
+    if (HV && HV.inferImpliedActions) {
+      for (const hand of session.hands) {
+        HV.inferImpliedActions(hand, SEAT_COUNT);
+      }
+    }
+
     // Auto-save for crash recovery
     saveSessionToStorage(data);
 
@@ -2066,12 +2093,18 @@
       });
     }
 
-    // Build player names (convert 1-based keys to 0-based)
+    // Build player names with 1-based keys (engine looks up [seat+1] first)
+    // Hero seat always displays as "Hero"
     const playerNames = {};
     for (let s = 0; s < SEAT_COUNT; s += 1) {
-      const sessionPlayer = session.players[s + 1] || session.players[s];
+      const seatKey = s + 1; // 1-based key for engine lookup
+      const sessionPlayer = session.players[seatKey];
       if (sessionPlayer) {
-        playerNames[s] = { name: sessionPlayer.name || `Seat ${s + 1}`, description: sessionPlayer.description || "" };
+        const isHero = s === heroSeat;
+        playerNames[seatKey] = {
+          name: isHero ? "Hero" : (sessionPlayer.name || `Seat ${seatKey}`),
+          description: sessionPlayer.description || ""
+        };
       }
     }
 
@@ -2327,8 +2360,15 @@
 
     const playerNames = {};
     for (let s = 0; s < SEAT_COUNT; s += 1) {
-      const sp = session.players[s + 1] || session.players[s];
-      if (sp) playerNames[s] = { name: sp.name, description: sp.description || "" };
+      const seatKey = s + 1;
+      const sp = session.players[seatKey];
+      if (sp) {
+        const isHero = s === heroSeat;
+        playerNames[seatKey] = {
+          name: isHero ? "Hero" : (sp.name || `Seat ${seatKey}`),
+          description: sp.description || ""
+        };
+      }
     }
 
     const init = PE.initializeHand({
@@ -2845,8 +2885,15 @@
   function startQA(sessionData) {
     qaState.sessionData = sessionData;
 
-    // Run Hold'em rules validation first
+    // Run implicit action inference before validation
     const HV = window.HoldemValidator;
+    if (HV && HV.inferImpliedActions) {
+      for (const hand of (sessionData.hands || [])) {
+        HV.inferImpliedActions(hand, SEAT_COUNT);
+      }
+    }
+
+    // Run Hold'em rules validation
     let questions = [];
     if (HV) {
       const violations = HV.validateSession(sessionData);
@@ -3169,12 +3216,31 @@
     els.parseLoadJsonBtn.addEventListener("click", () => {
       const text = els.parseTextArea.value.trim();
       if (!text) { els.parseStatus.textContent = "Paste session data first."; return; }
+
+      // Try JSON first
       try {
         const data = JSON.parse(text);
-        startQA(data);
-      } catch (e) {
-        els.parseStatus.textContent = "Not valid JSON. Use parse_session.py to convert text notes to JSON first.";
+        if (data && (data.hands || data.action_sequence || data.version)) {
+          startQA(data);
+          return;
+        }
+      } catch (_) { /* not JSON — try shorthand */ }
+
+      // Try shorthand parsing
+      const SL = window.ShorthandLearner;
+      if (SL) {
+        const result = SL.parseWithProfile(text, "default", {
+          blinds: session.blinds || { small: 2, big: 5 },
+          heroSeat: 1
+        });
+        if (result.hands && result.hands.length > 0) {
+          els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from text. Loading...`;
+          startQA(result);
+          return;
+        }
       }
+
+      els.parseStatus.textContent = "Could not parse as JSON or shorthand. Check the format and try again.";
     });
     els.parseBackBtn.addEventListener("click", () => showScreen("upload"));
 
@@ -3356,30 +3422,41 @@
   }
 
   function handleFile(file) {
-    const name = file.name.toLowerCase();
     const reader = new FileReader();
 
-    if (name.endsWith(".json")) {
-      reader.onload = () => {
-        try {
-          const data = JSON.parse(reader.result);
+    reader.onload = () => {
+      const text = reader.result;
+
+      // Try JSON first (regardless of extension)
+      try {
+        const data = JSON.parse(text);
+        if (data && (data.hands || data.action_sequence || data.version)) {
           startQA(data);
-        } catch (err) {
-          window.alert("Failed to parse JSON: " + err.message);
+          return;
         }
-      };
-      reader.readAsText(file);
-    } else if (name.endsWith(".txt") || name.endsWith(".docx")) {
-      reader.onload = () => {
-        // Show in parse screen for manual review
-        els.parseTextArea.value = reader.result;
-        els.parseStatus.textContent = `Loaded ${file.name} (${reader.result.length} chars). To parse with AI, run: python3 parse_session.py "${file.name}" -o session.json`;
-        showScreen("parse");
-      };
-      reader.readAsText(file);
-    } else {
-      window.alert("Supported formats: .json, .txt, .docx");
-    }
+      } catch (_) { /* not JSON, continue */ }
+
+      // Parse as shorthand text using ShorthandLearner
+      const SL = window.ShorthandLearner;
+      if (SL) {
+        const result = SL.parseWithProfile(text, "default", {
+          blinds: session.blinds || { small: 2, big: 5 },
+          heroSeat: 1,
+          sessionName: file.name.replace(/\.[^.]+$/, "")
+        });
+        if (result.hands && result.hands.length > 0) {
+          startQA(result);
+          return;
+        }
+      }
+
+      // Fallback: show in parse screen for manual review
+      els.parseTextArea.value = text;
+      els.parseStatus.textContent = `Loaded ${file.name} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
+      showScreen("parse");
+    };
+
+    reader.readAsText(file);
   }
 
   // ---- Init ----
@@ -3387,17 +3464,24 @@
   createSeatElements();
   setupEvents();
 
-  // Check for saved session
+  // Check for saved session — small dismissible link, doesn't block new uploads
   const saved = loadSessionFromStorage();
   if (saved && saved.hands && saved.hands.length) {
-    // Show resume option
-    const resumeBtn = document.createElement("button");
-    resumeBtn.className = "demo-btn";
-    resumeBtn.style.background = "#444";
-    resumeBtn.style.marginTop = "8px";
-    resumeBtn.textContent = `Resume: ${saved.session_name || "Last Session"} (${saved.hands.length} hands)`;
-    resumeBtn.addEventListener("click", () => loadSession(saved));
-    els.uploadZone.parentElement.insertBefore(resumeBtn, els.uploadZone.nextSibling);
+    const resumeRow = document.createElement("div");
+    resumeRow.style.cssText = "display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; font-size:12px; color:var(--text-muted);";
+    const resumeLink = document.createElement("a");
+    resumeLink.href = "#";
+    resumeLink.style.cssText = "color:var(--btn-primary); text-decoration:underline; cursor:pointer;";
+    resumeLink.textContent = `Resume "${saved.session_name || "Last Session"}" (${saved.hands.length} hands)`;
+    resumeLink.addEventListener("click", (e) => { e.preventDefault(); loadSession(saved); });
+    const dismissBtn = document.createElement("span");
+    dismissBtn.style.cssText = "cursor:pointer; opacity:0.5; font-size:14px;";
+    dismissBtn.textContent = "\u2715";
+    dismissBtn.title = "Dismiss";
+    dismissBtn.addEventListener("click", () => resumeRow.remove());
+    resumeRow.appendChild(resumeLink);
+    resumeRow.appendChild(dismissBtn);
+    els.uploadZone.parentElement.insertBefore(resumeRow, els.uploadZone.nextSibling);
   }
 
   showScreen("upload");

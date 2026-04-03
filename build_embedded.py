@@ -97,15 +97,22 @@ def build():
     shared_js = read_shared_js()
     shared_script = f"<script>\n{shared_js}\n</script>"
 
-    # Inject at <!-- SHARED_ENGINE --> marker, or before the main <script>
-    marker = "<!-- SHARED_ENGINE -->"
-    if marker in html:
-        html = html.replace(marker, f"{card_script}\n{shared_script}")
+    # Replace dev-mode script tags with inlined JS
+    start_marker = "<!-- SHARED_ENGINE_START"
+    end_marker = "<!-- SHARED_ENGINE_END -->"
+    if start_marker in html and end_marker in html:
+        start_idx = html.index(start_marker)
+        end_idx = html.index(end_marker) + len(end_marker)
+        html = html[:start_idx] + f"{card_script}\n{shared_script}" + html[end_idx:]
     else:
-        # Inject before the last <script> block
-        last_script_idx = html.rfind("<script>")
-        if last_script_idx >= 0:
-            html = html[:last_script_idx] + f"{card_script}\n{shared_script}\n" + html[last_script_idx:]
+        # Legacy fallback
+        marker = "<!-- SHARED_ENGINE -->"
+        if marker in html:
+            html = html.replace(marker, f"{card_script}\n{shared_script}")
+        else:
+            last_script_idx = html.rfind("<script>")
+            if last_script_idx >= 0:
+                html = html[:last_script_idx] + f"{card_script}\n{shared_script}\n" + html[last_script_idx:]
 
     # Write output
     with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
