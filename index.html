@@ -943,15 +943,14 @@
 <!-- ============= UPLOAD SCREEN ============= -->
 <div id="uploadScreen" class="screen upload-screen active">
   <h1>Session Replayer</h1>
-  <p>Upload a session file or load the demo to get started.</p>
+  <p>Upload a session file or paste session notes to get started.</p>
   <div id="uploadZone" class="upload-zone">
     <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
     <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md">
   </div>
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
-    <button id="loadDemoBtn" class="demo-btn">Load Demo Session</button>
-    <button id="pasteTextBtn" class="demo-btn" style="background:#555">Paste Session Notes</button>
+    <button id="pasteTextBtn" class="demo-btn">Paste Session Notes</button>
     <button id="learnShorthandBtn" class="demo-btn" style="background:#444; font-size:13px;">Teach Shorthand</button>
   </div>
 </div>
@@ -4296,7 +4295,6 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     qaScreen: document.getElementById("qaScreen"),
     uploadZone: document.getElementById("uploadZone"),
     fileInput: document.getElementById("fileInput"),
-    loadDemoBtn: document.getElementById("loadDemoBtn"),
     pasteTextBtn: document.getElementById("pasteTextBtn"),
     parseTextArea: document.getElementById("parseTextArea"),
     parseBlinds: document.getElementById("parseBlinds"),
@@ -5801,147 +5799,6 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
 
   // ---- Demo Session ----
 
-  function buildDemoSession() {
-    return {
-      version: 2,
-      app: "session-replayer",
-      session_name: "Demo: Tuesday $2/$5 Session",
-      blinds: { small: 2, big: 5 },
-      players: {
-        "1": { name: "Hero", description: "Our seat", is_hero: true },
-        "2": { name: "Dave", description: "Tight reg, sunglasses" },
-        "3": { name: "Fish", description: "Loose passive, calls everything" },
-        "4": { name: "Seat 4", description: "" },
-        "5": { name: "Nit", description: "Only plays premiums" },
-        "6": { name: "LAG", description: "Loose aggressive, 3-bets wide" },
-        "7": { name: "OMC", description: "Old man coffee, very tight" },
-        "8": { name: "Rec", description: "Recreational, having fun" },
-        "9": { name: "Pro", description: "Solid winning player" }
-      },
-      hands: [
-        {
-          hand_id: 1,
-          hand_label: "Hand 1",
-          status: "confirmed",
-          hero_seat: 1,
-          button_seat: 9,
-          blinds: { small: 2, big: 5 },
-          stacks: { 1: 500, 2: 650, 3: 300, 4: 500, 5: 500, 6: 800, 7: 500, 8: 400, 9: 1000 },
-          hero_cards: ["Ah", "Kd"],
-          known_villain_cards: { "3": ["9s", "7s"] },
-          board: { flop: ["Ks", "9h", "4c"], turn: "2d", river: "Jh" },
-          action_sequence: [
-            {
-              street: "preflop",
-              actions: [
-                { seat: 3, position: "UTG", action: "fold" },
-                { seat: 4, position: "UTG+1", action: "fold" },
-                { seat: 5, position: "UTG+2", action: "fold" },
-                { seat: 6, position: "LJ", action: "fold" },
-                { seat: 7, position: "HJ", action: "fold" },
-                { seat: 8, position: "CO", action: "raise", amount: 15 },
-                { seat: 9, position: "BTN", action: "fold" },
-                { seat: 1, position: "SB", action: "raise", amount: 50 },
-                { seat: 2, position: "BB", action: "fold" },
-                { seat: 8, position: "CO", action: "call", amount: 50 }
-              ]
-            },
-            {
-              street: "flop",
-              actions: [
-                { seat: 1, position: "SB", action: "bet", amount: 45 },
-                { seat: 8, position: "CO", action: "call", amount: 45 }
-              ]
-            },
-            {
-              street: "turn",
-              actions: [
-                { seat: 1, position: "SB", action: "bet", amount: 120 },
-                { seat: 8, position: "CO", action: "fold" }
-              ]
-            }
-          ],
-          result: { winner_seat: 1, pot: 330, showdown: false, notes: "Hero takes it on the turn" },
-          coach_flags: { starred: true, tag: "3-bet pot OOP" }
-        },
-        {
-          hand_id: 2,
-          hand_label: "Hand 2",
-          status: "confirmed",
-          hero_seat: 1,
-          button_seat: 1,
-          blinds: { small: 2, big: 5 },
-          stacks: { 1: 830, 2: 645, 3: 300, 4: 500, 5: 500, 6: 800, 7: 500, 8: 250, 9: 1000 },
-          hero_cards: ["Qh", "Jh"],
-          known_villain_cards: {},
-          board: { flop: ["Th", "8h", "3d"], turn: "2h", river: "Ac" },
-          action_sequence: [
-            {
-              street: "preflop",
-              actions: [
-                { seat: 3, position: "UTG", action: "fold" },
-                { seat: 4, position: "UTG+1", action: "fold" },
-                { seat: 5, position: "UTG+2", action: "fold" },
-                { seat: 6, position: "LJ", action: "call", amount: 5 },
-                { seat: 7, position: "HJ", action: "fold" },
-                { seat: 8, position: "CO", action: "fold" },
-                { seat: 1, position: "BTN", action: "raise", amount: 20 },
-                { seat: 9, position: "SB", action: "fold" },
-                { seat: 2, position: "BB", action: "fold" },
-                { seat: 6, position: "LJ", action: "call", amount: 20 }
-              ]
-            },
-            {
-              street: "flop",
-              actions: [
-                { seat: 6, position: "LJ", action: "check" },
-                { seat: 1, position: "BTN", action: "bet", amount: 30 },
-                { seat: 6, position: "LJ", action: "call", amount: 30 }
-              ]
-            },
-            {
-              street: "turn",
-              actions: [
-                { seat: 6, position: "LJ", action: "check" },
-                { seat: 1, position: "BTN", action: "bet", amount: 70 },
-                { seat: 6, position: "LJ", action: "fold" }
-              ]
-            }
-          ],
-          result: { winner_seat: 1, pot: 170, showdown: false, notes: "Flush draw got there, villain folds turn" },
-          coach_flags: { starred: false }
-        },
-        {
-          hand_id: 3,
-          hand_label: "Hand 3",
-          status: "confirmed",
-          hero_seat: 1,
-          button_seat: 2,
-          blinds: { small: 2, big: 5 },
-          stacks: { 1: 1000, 2: 645, 3: 300, 4: 500, 5: 500, 6: 750, 7: 500, 8: 250, 9: 1000 },
-          hero_cards: ["7d", "2c"],
-          known_villain_cards: {},
-          board: {},
-          action_sequence: [
-            {
-              street: "preflop",
-              actions: [
-                { seat: 4, position: "UTG", action: "raise", amount: 15 },
-                { seat: 5, position: "UTG+1", action: "fold" },
-                { seat: 6, position: "UTG+2", action: "fold" },
-                { seat: 7, position: "LJ", action: "fold" },
-                { seat: 8, position: "HJ", action: "fold" },
-                { seat: 1, position: "CO", action: "fold" }
-              ]
-            }
-          ],
-          result: { winner_seat: 4, pot: 22, showdown: false, notes: "Hero folds garbage preflop" },
-          coach_flags: { starred: false }
-        }
-      ]
-    };
-  }
-
   // ---- Ambiguity Detection & Q&A ----
 
   const qaState = {
@@ -6330,7 +6187,6 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
 
   function setupEvents() {
     // Upload
-    els.loadDemoBtn.addEventListener("click", () => loadSession(buildDemoSession()));
     els.pasteTextBtn.addEventListener("click", () => showScreen("parse"));
 
     // Parse screen
