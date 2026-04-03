@@ -76,18 +76,18 @@
   /* ---- Game Context Banner ---- */
   .game-banner {
     background: linear-gradient(90deg, #1a2a1a 0%, #1a3a2a 50%, #1a2a1a 100%);
-    border-bottom: 1px solid #2a4a2a;
-    padding: 5px 16px;
+    border-bottom: 2px solid #2a5a2a;
+    padding: 8px 20px;
     display: flex;
     align-items: center;
-    gap: 16px;
-    font-size: 13px;
+    gap: 20px;
+    font-size: 16px;
     flex-shrink: 0;
   }
-  .game-banner .game-label { color: #6b6; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
-  .game-banner .game-desc { color: #bdb; flex: 1; }
-  .game-banner .game-blinds { color: #ffd700; font-weight: 700; }
-  .game-banner .game-extra { color: var(--text-muted); font-size: 12px; }
+  .game-banner .game-label { color: #6b6; font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: 1.5px; }
+  .game-banner .game-desc { color: #cec; flex: 1; font-weight: 600; }
+  .game-banner .game-blinds { color: #ffd700; font-weight: 800; font-size: 18px; }
+  .game-banner .game-extra { color: var(--text-muted); font-size: 14px; }
 
   /* ---- Main Layout ---- */
   .main-layout {
@@ -183,7 +183,7 @@
   /* ---- Pot Display ---- */
   .pot-display {
     position: absolute;
-    top: 62%;
+    top: 25%;
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
@@ -192,13 +192,14 @@
     align-items: center;
     gap: 10px;
   }
-  .pot-label { font-size: 12px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px; }
-  .pot-amount { font-size: 28px; font-weight: 800; color: #ffd700; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+  .pot-label { font-size: 14px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .pot-amount { font-size: 36px; font-weight: 900; color: #ffd700; text-shadow: 0 3px 8px rgba(0,0,0,0.7); }
   .pot-chips {
     display: flex;
     align-items: flex-end;
     gap: 2px;
     height: 32px;
+    transition: filter 0.2s ease-out;
   }
   .pot-chip-stack {
     width: 18px;
@@ -221,7 +222,7 @@
   /* Side pots display */
   .side-pots {
     position: absolute;
-    top: 72%;
+    top: 62%;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -259,23 +260,23 @@
     left: 50%;
     transform: translate(-50%, -50%);
     display: flex;
-    gap: 6px;
+    gap: 8px;
   }
   .board-card {
-    width: 73px;
-    height: 104px;
-    border-radius: 6px;
+    width: 95px;
+    height: 135px;
+    border-radius: 7px;
     background: #fff;
     border: 1px solid #999;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
   }
   .board-card.empty { background: rgba(255,255,255,0.1); border: 1px dashed rgba(255,255,255,0.2); }
-  .board-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 5px; }
+  .board-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
 
   /* ---- Seats ---- */
   .seat {
@@ -306,8 +307,24 @@
 
   .seat-position { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .seat-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
-  .seat-stack { font-size: 20px; font-weight: 800; color: #7bed7b; text-shadow: 0 1px 3px rgba(0,0,0,0.4); cursor: pointer; }
+  .seat-stack { font-size: 28px; font-weight: 900; color: #7bed7b; text-shadow: 0 2px 4px rgba(0,0,0,0.5); cursor: pointer; }
   .seat-stack:hover { text-decoration: underline; }
+  .seat-stack-delta {
+    font-size: 18px;
+    font-weight: 800;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -22px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 1.2s ease-out;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .seat-stack-delta.loss { color: #ff6666; }
+  .seat-stack-delta.gain { color: #66ff66; }
+  .seat-stack-delta.show { opacity: 1; transition: none; }
   .seat-stack-edit {
     width: 70px;
     font-size: 16px;
@@ -389,26 +406,39 @@
   /* Seat-level action badge — persists for the street */
   .seat-action {
     position: absolute;
-    bottom: -24px;
+    bottom: -28px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 13px;
-    font-weight: 700;
-    padding: 3px 12px;
-    border-radius: 10px;
+    font-size: 18px;
+    font-weight: 800;
+    padding: 4px 14px;
+    border-radius: 12px;
     white-space: nowrap;
     opacity: 0;
     transition: opacity 0.2s;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
   .seat-action.visible { opacity: 1; }
-  .seat-action.fold { background: #662222; color: #faa; }
-  .seat-action.check { background: #336633; color: #afa; }
-  .seat-action.call { background: #336633; color: #afa; }
-  .seat-action.bet { background: #664400; color: #fda; }
-  .seat-action.raise { background: #664400; color: #fda; }
-  .seat-action.all-in { background: #663366; color: #faf; }
+  .seat-action.fold { background: #882222; color: #ffaaaa; }
+  .seat-action.check { background: #227722; color: #88ff88; }
+  .seat-action.call { background: #225588; color: #88ccff; }
+  .seat-action.bet { background: #886600; color: #ffdd66; }
+  .seat-action.raise { background: #886600; color: #ffdd66; }
+  .seat-action.all-in { background: #882266; color: #ff88ff; }
   .seat-action.blind { background: #333355; color: #aaf; }
   .seat-action.straddle { background: #553333; color: #faa; }
+
+  /* Keyframes for action popup attention effect */
+  @keyframes popupBounceIn {
+    0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+    70% { transform: translate(-50%, -50%) scale(0.95); }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  @keyframes allInPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(255,100,100,0.6), 0 0 40px rgba(255,50,50,0.3); }
+    50% { box-shadow: 0 0 30px rgba(255,200,50,0.8), 0 0 60px rgba(255,100,50,0.5); }
+  }
 
   /* Big center-table action pop-up */
   .action-popup {
@@ -417,46 +447,49 @@
     z-index: 20;
     pointer-events: none;
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.5);
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out, left 0.12s ease-out, top 0.12s ease-out;
+    transform: translate(-50%, -50%) scale(0.3);
+    transition: left 0.12s ease-out, top 0.12s ease-out;
   }
   .action-popup.visible {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
+    animation: popupBounceIn 0.35s ease-out forwards;
   }
   .action-popup.fade-out {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.05);
-    transition: opacity 0.4s ease-in, transform 0.4s ease-in;
+    transition: opacity 0.5s ease-in, transform 0.5s ease-in;
+    animation: none;
   }
   .action-popup-player {
-    font-size: 16px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 4px;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.7);
-  }
-  .action-popup-action {
-    font-size: 36px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    text-shadow: 0 3px 8px rgba(0,0,0,0.5);
-    padding: 6px 24px;
-    border-radius: 12px;
-  }
-  .action-popup-action.fold { color: #ff8888; background: rgba(100,20,20,0.7); }
-  .action-popup-action.check { color: #88ff88; background: rgba(20,80,20,0.7); }
-  .action-popup-action.call { color: #88ff88; background: rgba(20,80,20,0.7); }
-  .action-popup-action.bet { color: #ffdd66; background: rgba(100,60,0,0.7); }
-  .action-popup-action.raise { color: #ffdd66; background: rgba(100,60,0,0.7); }
-  .action-popup-action.all-in { color: #ff88ff; background: rgba(80,20,80,0.7); }
-  .action-popup-amount {
     font-size: 20px;
     font-weight: 700;
     color: #fff;
-    margin-top: 2px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    margin-bottom: 6px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  .action-popup-action {
+    font-size: 54px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    padding: 10px 32px;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
+  }
+  .action-popup-action.fold { color: #ff9999; background: rgba(120,20,20,0.85); }
+  .action-popup-action.check { color: #88ff88; background: rgba(20,90,20,0.85); }
+  .action-popup-action.call { color: #88ccff; background: rgba(20,60,120,0.85); }
+  .action-popup-action.bet { color: #ffdd66; background: rgba(120,70,0,0.85); }
+  .action-popup-action.raise { color: #ffdd66; background: rgba(120,70,0,0.85); }
+  .action-popup-action.all-in { color: #ff88ff; background: rgba(100,20,100,0.85); animation: allInPulse 1s ease-in-out infinite; }
+  .action-popup-amount {
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    margin-top: 4px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
   }
 
   /* Street announcement banner */
@@ -943,6 +976,9 @@
     </label>
     <label style="font-size:13px;">Session Name:
       <input id="parseSessionName" style="width:200px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="Tuesday $2/5">
+    </label>
+    <label style="font-size:13px;">Game Description:
+      <input id="parseSessionDesc" style="width:300px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="e.g. Playing 2-5 at the Wynn — straddle is on most hands">
     </label>
   </div>
   <textarea id="parseTextArea" style="width:min(90%,700px); height:300px; padding:12px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:13px; resize:vertical;" placeholder="Paste session notes or JSON here..."></textarea>
@@ -4247,7 +4283,8 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     heroCards: [],
     knownVillainCards: {},
     currentStreet: "preflop",
-    actionCallouts: {}            // { seat: { action, amount, timer } }
+    actionCallouts: {},            // { seat: { action, amount, timer } }
+    previousStacks: null           // { seat: stack } — for delta display, null = suppress deltas
   };
 
   // ---- DOM Refs ----
@@ -4265,6 +4302,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     parseBlinds: document.getElementById("parseBlinds"),
     parseHeroSeat: document.getElementById("parseHeroSeat"),
     parseSessionName: document.getElementById("parseSessionName"),
+    parseSessionDesc: document.getElementById("parseSessionDesc"),
     parseLoadJsonBtn: document.getElementById("parseLoadJsonBtn"),
     parseBackBtn: document.getElementById("parseBackBtn"),
     parseStatus: document.getElementById("parseStatus"),
@@ -4374,6 +4412,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
           <div class="seat-position" data-seat-position></div>
           <div class="seat-name" data-seat-name>Seat ${i + 1}</div>
           <div class="seat-stack" data-seat-stack>--</div>
+          <div class="seat-stack-delta" data-seat-delta></div>
           <div class="seat-chipstack" data-seat-chipstack></div>
           <div class="seat-cards" data-seat-cards></div>
         </div>
@@ -4402,6 +4441,26 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       el.querySelector("[data-seat-name]").textContent = player.name || `Seat ${i + 1}`;
       el.querySelector("[data-seat-stack]").textContent = player.stack;
       renderSeatChipStack(el.querySelector("[data-seat-chipstack]"), player.stack);
+
+      // Stack delta display
+      const deltaEl = el.querySelector("[data-seat-delta]");
+      if (deltaEl && playback.previousStacks && playback.previousStacks[i] !== undefined) {
+        const diff = player.stack - playback.previousStacks[i];
+        if (diff !== 0) {
+          deltaEl.textContent = diff > 0 ? `+${diff}` : `${diff}`;
+          deltaEl.className = `seat-stack-delta show ${diff > 0 ? "gain" : "loss"}`;
+          // Trigger fade after a frame
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              deltaEl.classList.remove("show");
+            });
+          });
+        } else {
+          deltaEl.className = "seat-stack-delta";
+        }
+      } else if (deltaEl) {
+        deltaEl.className = "seat-stack-delta";
+      }
 
       el.classList.toggle("acting", playback.tableState && playback.tableState.actionSeat === i);
       el.classList.toggle("hero", playback.tableState && playback.tableState.heroSeat === i);
@@ -4718,7 +4777,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     renderSeats();
   }
 
-  // Position popup halfway between seat and table center
+  // Position popup between seat and table center, clamped to felt bounds
   function popupPositionForSeat(seat) {
     const seatEl = els.seatElements[seat];
     if (!seatEl) return { left: "50%", top: "50%" };
@@ -4731,9 +4790,14 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     const centerX = feltRect.width / 2;
     const centerY = feltRect.height / 2;
 
-    // 55% of the way from seat toward center (closer to seat than center)
-    const px = seatCx + (centerX - seatCx) * 0.55;
-    const py = seatCy + (centerY - seatCy) * 0.55;
+    // 50% of the way from seat toward center
+    let px = seatCx + (centerX - seatCx) * 0.50;
+    let py = seatCy + (centerY - seatCy) * 0.50;
+
+    // Clamp to felt bounds with margin so large popups don't overflow
+    const margin = 120;
+    px = Math.max(margin, Math.min(feltRect.width - margin, px));
+    py = Math.max(60, Math.min(feltRect.height - 60, py));
 
     return { left: px + "px", top: py + "px" };
   }
@@ -4769,8 +4833,8 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       els.actionPopup.classList.add("fade-out");
       popupFadeTimer = setTimeout(() => {
         els.actionPopup.className = "action-popup";
-      }, 500);
-    }, 1400);
+      }, 600);
+    }, 2800);
   }
 
   function clearAllCallouts() {
@@ -4867,7 +4931,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       return;
     }
     const potX = feltRect.width / 2;
-    const potY = feltRect.height * 0.62;
+    const potY = feltRect.height * 0.25;
 
     // Animate all chips to pot center
     chipEls.forEach((el) => {
@@ -4875,8 +4939,12 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       el.style.top = potY + "px";
     });
 
-    // After animation, fade out and remove
+    // After animation, flash pot glow and fade out chips
     setTimeout(() => {
+      // Flash the pot display with a glow effect
+      els.potChips.style.filter = "brightness(1.8) drop-shadow(0 0 12px rgba(255,215,0,0.8))";
+      setTimeout(() => { els.potChips.style.filter = ""; }, 400);
+
       chipEls.forEach((el) => {
         el.style.opacity = "0";
       });
@@ -4983,6 +5051,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   function loadSession(data) {
     session.loaded = true;
     session.name = data.session_name || "Unnamed Session";
+    session.description = data.description || "";
     session.hands = data.hands || [];
     session.players = data.players || {};
     session.blinds = data.blinds || { small: 5, big: 10 };
@@ -5015,11 +5084,13 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     els.handCountDisplay.textContent = `${session.hands.length} hands`;
 
     // Game context banner
-    const blindsStr = `$${session.blinds.small}/$${session.blinds.big}`;
+    let blindsStr = `$${session.blinds.small}/$${session.blinds.big}`;
+    if (session.blinds.ante) blindsStr += ` (ante $${session.blinds.ante})`;
+    if (session.blinds.straddle) blindsStr += ` + $${session.blinds.straddle} straddle`;
     els.gameBlinds.textContent = blindsStr;
-    els.gameDesc.textContent = session.name || "";
+    els.gameDesc.textContent = session.description || session.name || "";
     els.gameExtra.textContent = session.hands.length + " hands";
-    els.gameBanner.style.display = session.name ? "flex" : "none";
+    els.gameBanner.style.display = "flex";
 
     renderHandList();
     renderPlayerInfo();
@@ -5077,11 +5148,27 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     });
   }
 
+  // ---- Stack Delta Tracking ----
+
+  function captureCurrentStacks() {
+    const stacks = {};
+    for (let i = 0; i < SEAT_COUNT; i++) {
+      const p = PE.getPlayerBySeat(playback.players, i);
+      if (p) stacks[i] = p.stack;
+    }
+    playback.previousStacks = stacks;
+  }
+
+  function suppressStackDeltas() {
+    playback.previousStacks = null;
+  }
+
   // ---- Hand Loading ----
 
   function loadHand(idx) {
     if (idx < 0 || idx >= session.hands.length) return;
 
+    suppressStackDeltas();
     clearAllCallouts();
     playback.currentHandIndex = idx;
     playback.mode = "script";
@@ -5255,6 +5342,9 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   }
 
   function applyStepAction(step, nextIdx) {
+    // Capture stacks before this action for delta display
+    captureCurrentStacks();
+
     const seatIdx = (step.seat || 1) - 1;
     const action = PE.normalizeActionName(step.action);
     const amount = step.amount || 0;
@@ -5375,6 +5465,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
   }
 
   function replayToStep(targetStep) {
+    suppressStackDeltas();
     // Reload the hand fresh
     const hand = session.hands[playback.currentHandIndex];
     const heroSeat = (hand.hero_seat || 1) - 1;
@@ -5571,6 +5662,7 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
     if (playback.mode !== "branch") return;
     if (!playback.tableState || playback.tableState.actionSeat < 0) return;
 
+    captureCurrentStacks();
     const seat = playback.tableState.actionSeat;
     const bb = session.blinds.big;
     const result = PE.applyPlayerAction(seat, action, sizeChips || 0,
@@ -6246,30 +6338,56 @@ if (typeof window !== "undefined") window.ShorthandLearner = ShorthandLearner;
       const text = els.parseTextArea.value.trim();
       if (!text) { els.parseStatus.textContent = "Paste session data first."; return; }
 
-      // Try JSON first
-      try {
-        const data = JSON.parse(text);
-        if (data && (data.hands || data.action_sequence || data.version)) {
-          startQA(data);
-          return;
-        }
-      } catch (_) { /* not JSON — try shorthand */ }
+      // Apply user-entered session name and description
+      function applyParseScreenMeta(data) {
+        const nameVal = els.parseSessionName.value.trim();
+        const descVal = els.parseSessionDesc.value.trim();
+        if (nameVal) data.session_name = nameVal;
+        if (descVal) data.description = descVal;
+        return data;
+      }
 
-      // Try shorthand parsing
-      const SL = window.ShorthandLearner;
-      if (SL) {
-        const result = SL.parseWithProfile(text, "default", {
-          blinds: session.blinds || { small: 2, big: 5 },
-          heroSeat: 1
-        });
-        if (result.hands && result.hands.length > 0) {
-          els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from text. Loading...`;
-          startQA(result);
+      const looksLikeJson = text[0] === "{" || text[0] === "[";
+
+      // Try JSON first
+      if (looksLikeJson) {
+        try {
+          const data = JSON.parse(text);
+          if (data && (data.hands || data.action_sequence || data.version)) {
+            els.parseStatus.textContent = `Detected JSON session data — loading ${(data.hands || []).length} hand(s)...`;
+            startQA(applyParseScreenMeta(data));
+            return;
+          }
+        } catch (jsonErr) {
+          // JSON-like but malformed — offer fallback
+          els.parseStatus.innerHTML = `JSON parse error: ${jsonErr.message}. ` +
+            `<button id="tryAsNotesBtn" style="margin-left:8px; padding:2px 10px; background:#446; color:#eee; border:1px solid #667; border-radius:4px; cursor:pointer;">Try as session notes instead?</button>`;
+          document.getElementById("tryAsNotesBtn").addEventListener("click", () => {
+            tryShorthandParse(text, applyParseScreenMeta);
+          });
           return;
         }
       }
 
-      els.parseStatus.textContent = "Could not parse as JSON or shorthand. Check the format and try again.";
+      // Try shorthand parsing
+      tryShorthandParse(text, applyParseScreenMeta);
+
+      function tryShorthandParse(noteText, metaFn) {
+        els.parseStatus.textContent = "Detected session notes — parsing...";
+        const SL = window.ShorthandLearner;
+        if (SL) {
+          const result = SL.parseWithProfile(noteText, "default", {
+            blinds: session.blinds || { small: 2, big: 5 },
+            heroSeat: 1
+          });
+          if (result.hands && result.hands.length > 0) {
+            els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from session notes. Loading...`;
+            startQA(metaFn(result));
+            return;
+          }
+        }
+        els.parseStatus.textContent = "Could not parse as JSON or session notes. Check the format and try again.";
+      }
     });
     els.parseBackBtn.addEventListener("click", () => showScreen("upload"));
 
