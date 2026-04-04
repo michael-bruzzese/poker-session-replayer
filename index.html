@@ -986,6 +986,193 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+  /* ---- Equity Calculator ---- */
+  .equity-toggle-btn {
+    background: #2a4a7f;
+    color: #fff;
+    border: 1px solid #3a5a9f;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .equity-toggle-btn:hover { background: #3a5a9f; }
+  .equity-toggle-btn.active { background: #4a9eff; border-color: #4a9eff; }
+
+  .equity-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 40%;
+    min-width: 480px;
+    max-width: 720px;
+    height: 100vh;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--panel-border);
+    box-shadow: -4px 0 16px rgba(0,0,0,0.5);
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+  }
+  .equity-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--panel-border);
+    flex-shrink: 0;
+  }
+  .equity-panel-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .equity-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 6px;
+  }
+  .equity-close-btn:hover { color: var(--text-primary); }
+  .equity-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+  .equity-context {
+    background: #13131f;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .equity-context-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .equity-context-label {
+    color: var(--text-secondary);
+    width: 50px;
+  }
+  .equity-context-cards {
+    color: var(--text-primary);
+    font-family: "SF Mono", Menlo, monospace;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .equity-results {
+    background: #13131f;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+    min-height: 48px;
+  }
+  .equity-status {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-style: italic;
+  }
+  .equity-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+  }
+  .equity-row-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .equity-row-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .equity-row.hero .equity-row-label { color: #4a9eff; }
+  .equity-row.hero .equity-row-value { color: #4a9eff; }
+
+  .equity-grid-block {
+    margin-bottom: 16px;
+    background: #13131f;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 10px;
+  }
+  .equity-grid-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .equity-grid-title {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .equity-grid-count {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .equity-grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    gap: 1px;
+    user-select: none;
+    max-width: 360px;
+  }
+  .equity-grid-cell {
+    aspect-ratio: 1 / 1;
+    background: #1f1f2e;
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 2px;
+    font-family: "SF Mono", Menlo, monospace;
+    transition: background 0.08s;
+  }
+  .equity-grid-cell:hover { background: #2a2a40; }
+  .equity-grid-cell.selected {
+    background: #2a8f2a;
+    color: #fff;
+  }
+  .equity-grid-cell.selected:hover { background: #34a834; }
+  .equity-grid-cell.blocked {
+    background: #2a2a2a;
+    color: #555;
+    cursor: not-allowed;
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+  .equity-grid-cell.blocked:hover { background: #2a2a2a; }
+  .equity-grid-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .equity-grid-actions button {
+    background: #2a2a3e;
+    color: var(--text-primary);
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .equity-grid-actions button:hover { background: #3a3a4e; }
 </style>
 </head>
 <body>
@@ -1221,6 +1408,9 @@
           <span class="status-label">Pot</span>
           <span id="statusPot" class="status-value">0</span>
         </div>
+        <div class="status-item" style="margin-left:auto;">
+          <button id="btnEquity" class="equity-toggle-btn" title="Open equity calculator">Equity</button>
+        </div>
       </div>
 
       <!-- Action Bar -->
@@ -1256,6 +1446,30 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Equity Side Panel -->
+  <div id="equityPanel" class="equity-panel" style="display:none;">
+    <div class="equity-panel-header">
+      <h3>Equity Calculator</h3>
+      <button id="equityCloseBtn" class="equity-close-btn" title="Close">&times;</button>
+    </div>
+    <div class="equity-panel-body">
+      <div class="equity-context">
+        <div class="equity-context-row">
+          <span class="equity-context-label">Hero</span>
+          <span id="equityHeroCards" class="equity-context-cards">--</span>
+        </div>
+        <div class="equity-context-row">
+          <span class="equity-context-label">Board</span>
+          <span id="equityBoardCards" class="equity-context-cards">--</span>
+        </div>
+      </div>
+      <div id="equityResults" class="equity-results">
+        <div class="equity-status" id="equityStatus">Select villain ranges below</div>
+      </div>
+      <div id="equityGrids" class="equity-grids"></div>
     </div>
   </div>
 </div>
@@ -5497,6 +5711,929 @@ if (typeof module !== "undefined" && module.exports) {
 }
 
 
+// ---- hand_evaluator.js ----
+// 7-Card Hand Evaluator
+// Given 7 cards, returns the best 5-card poker hand and a comparable rank.
+// Uses exhaustive enumeration of C(7,5)=21 combinations.
+// Correct for every possible hand; no approximations.
+
+const HandEvaluator = (() => {
+  "use strict";
+
+  // Hand type ordering (higher = better)
+  const HAND_TYPES = {
+    "high-card": 0,
+    "pair": 1,
+    "two-pair": 2,
+    "three-of-a-kind": 3,
+    "straight": 4,
+    "flush": 5,
+    "full-house": 6,
+    "four-of-a-kind": 7,
+    "straight-flush": 8
+  };
+
+  // Rank values: 2=0, 3=1, ... A=12
+  const RANK_VALUES = {
+    "2": 0, "3": 1, "4": 2, "5": 3, "6": 4, "7": 5, "8": 6,
+    "9": 7, "T": 8, "J": 9, "Q": 10, "K": 11, "A": 12
+  };
+
+  const RANK_NAMES = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+
+  // ---- Card Parsing ----
+
+  function parseCard(cardStr) {
+    if (!cardStr || cardStr.length < 2) return null;
+    const rank = cardStr[0].toUpperCase();
+    const suit = cardStr[1].toLowerCase();
+    const rankVal = RANK_VALUES[rank];
+    if (rankVal === undefined) return null;
+    if (!"hsdc".includes(suit)) return null;
+    return { rank: rankVal, suit, str: rank + suit };
+  }
+
+  function parseCards(cards) {
+    return cards.map(parseCard).filter(Boolean);
+  }
+
+  // ---- Five-Card Hand Encoding ----
+  // Encode as: handType*10^10 + primary*10^8 + secondary*10^6 + k1*10^4 + k2*10^2 + k3
+  // Max handType=8, max rank=12. 12*10^10 ≈ 1.2e11, fits in JS number.
+
+  function encode(handType, ranks) {
+    // ranks: array of up to 5 integers, most significant first
+    let code = handType * 1e10;
+    const mults = [1e8, 1e6, 1e4, 1e2, 1];
+    for (let i = 0; i < Math.min(5, ranks.length); i++) {
+      code += ranks[i] * mults[i];
+    }
+    return code;
+  }
+
+  // ---- Detect Hand Types (for 5 cards) ----
+
+  function evaluate5(fiveCards) {
+    // Input: 5 parsed cards
+    // Output: encoded rank (integer)
+
+    const ranks = fiveCards.map(c => c.rank).sort((a, b) => b - a); // descending
+    const suits = fiveCards.map(c => c.suit);
+
+    // Count rank frequencies
+    const rankCounts = {};
+    for (const r of ranks) rankCounts[r] = (rankCounts[r] || 0) + 1;
+
+    // Sort rank counts descending, then by rank value descending
+    const countEntries = Object.entries(rankCounts)
+      .map(([r, c]) => ({ rank: parseInt(r, 10), count: c }))
+      .sort((a, b) => b.count - a.count || b.rank - a.rank);
+
+    // Flush check
+    const isFlush = suits.every(s => s === suits[0]);
+
+    // Straight check
+    const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
+    let isStraight = false;
+    let straightHigh = -1;
+    if (uniqueRanks.length >= 5) {
+      // Check descending
+      for (let i = 0; i <= uniqueRanks.length - 5; i++) {
+        if (uniqueRanks[i] - uniqueRanks[i + 4] === 4) {
+          isStraight = true;
+          straightHigh = uniqueRanks[i];
+          break;
+        }
+      }
+      // Check wheel (A-2-3-4-5): A=12, 5=3, 4=2, 3=1, 2=0
+      if (!isStraight && uniqueRanks.includes(12) && uniqueRanks.includes(3) &&
+          uniqueRanks.includes(2) && uniqueRanks.includes(1) && uniqueRanks.includes(0)) {
+        isStraight = true;
+        straightHigh = 3; // 5-high straight
+      }
+    }
+
+    // Straight flush
+    if (isStraight && isFlush) {
+      return encode(HAND_TYPES["straight-flush"], [straightHigh]);
+    }
+
+    // Four of a kind
+    if (countEntries[0].count === 4) {
+      const quadRank = countEntries[0].rank;
+      const kicker = countEntries[1].rank;
+      return encode(HAND_TYPES["four-of-a-kind"], [quadRank, kicker]);
+    }
+
+    // Full house
+    if (countEntries[0].count === 3 && countEntries[1] && countEntries[1].count >= 2) {
+      return encode(HAND_TYPES["full-house"], [countEntries[0].rank, countEntries[1].rank]);
+    }
+
+    // Flush
+    if (isFlush) {
+      return encode(HAND_TYPES["flush"], ranks);
+    }
+
+    // Straight
+    if (isStraight) {
+      return encode(HAND_TYPES["straight"], [straightHigh]);
+    }
+
+    // Three of a kind
+    if (countEntries[0].count === 3) {
+      const tripRank = countEntries[0].rank;
+      const kickers = countEntries.slice(1).map(e => e.rank).slice(0, 2);
+      return encode(HAND_TYPES["three-of-a-kind"], [tripRank, ...kickers]);
+    }
+
+    // Two pair
+    if (countEntries[0].count === 2 && countEntries[1] && countEntries[1].count === 2) {
+      const highPair = countEntries[0].rank;
+      const lowPair = countEntries[1].rank;
+      const kicker = countEntries[2].rank;
+      return encode(HAND_TYPES["two-pair"], [highPair, lowPair, kicker]);
+    }
+
+    // One pair
+    if (countEntries[0].count === 2) {
+      const pairRank = countEntries[0].rank;
+      const kickers = countEntries.slice(1).map(e => e.rank).slice(0, 3);
+      return encode(HAND_TYPES["pair"], [pairRank, ...kickers]);
+    }
+
+    // High card
+    return encode(HAND_TYPES["high-card"], ranks);
+  }
+
+  // ---- 21 Combinations of 5 from 7 ----
+
+  function combinations5of7() {
+    // Precomputed indices for all C(7,5) = 21 combinations
+    const combos = [];
+    for (let a = 0; a < 7; a++) {
+      for (let b = a + 1; b < 7; b++) {
+        for (let c = b + 1; c < 7; c++) {
+          for (let d = c + 1; d < 7; d++) {
+            for (let e = d + 1; e < 7; e++) {
+              combos.push([a, b, c, d, e]);
+            }
+          }
+        }
+      }
+    }
+    return combos;
+  }
+
+  const COMBOS_5_OF_7 = combinations5of7();
+
+  // ---- Main Evaluator ----
+
+  function evaluateHand(cards) {
+    if (!cards || cards.length !== 7) return null;
+    const parsed = parseCards(cards);
+    if (parsed.length !== 7) return null;
+
+    let bestRank = -1;
+    let bestIndices = null;
+
+    for (const combo of COMBOS_5_OF_7) {
+      const fiveCards = [parsed[combo[0]], parsed[combo[1]], parsed[combo[2]], parsed[combo[3]], parsed[combo[4]]];
+      const rank = evaluate5(fiveCards);
+      if (rank > bestRank) {
+        bestRank = rank;
+        bestIndices = combo;
+      }
+    }
+
+    const bestFive = bestIndices.map(i => parsed[i].str);
+    const handType = rankToHandType(bestRank);
+    const description = describeHand(handType, bestRank);
+
+    return { rank: bestRank, handType, bestFive, description };
+  }
+
+  function rankToHandType(rank) {
+    const typeIdx = Math.floor(rank / 1e10);
+    for (const [name, idx] of Object.entries(HAND_TYPES)) {
+      if (idx === typeIdx) return name;
+    }
+    return "high-card";
+  }
+
+  function describeHand(handType, rank) {
+    // Simple human-readable description
+    const primary = Math.floor((rank % 1e10) / 1e8);
+    const secondary = Math.floor((rank % 1e8) / 1e6);
+    const primaryName = RANK_NAMES[primary] || "?";
+    const secondaryName = RANK_NAMES[secondary] || "?";
+
+    switch (handType) {
+      case "straight-flush":
+        return primary === 12 ? "Royal Flush" : `Straight Flush, ${primaryName}-high`;
+      case "four-of-a-kind":
+        return `Four of a Kind, ${primaryName}s`;
+      case "full-house":
+        return `Full House, ${primaryName}s full of ${secondaryName}s`;
+      case "flush":
+        return `Flush, ${primaryName}-high`;
+      case "straight":
+        return `Straight, ${primaryName}-high`;
+      case "three-of-a-kind":
+        return `Three of a Kind, ${primaryName}s`;
+      case "two-pair":
+        return `Two Pair, ${primaryName}s and ${secondaryName}s`;
+      case "pair":
+        return `Pair of ${primaryName}s`;
+      default:
+        return `${primaryName}-high`;
+    }
+  }
+
+  // ---- Comparison ----
+
+  function compareHands(rankA, rankB) {
+    if (rankA > rankB) return 1;
+    if (rankA < rankB) return -1;
+    return 0;
+  }
+
+  function determineWinners(handResults) {
+    // Input: array of { rank, ... }
+    // Output: array of indices of winning player(s)
+    if (!handResults || handResults.length === 0) return [];
+    let maxRank = handResults[0].rank;
+    for (let i = 1; i < handResults.length; i++) {
+      if (handResults[i].rank > maxRank) maxRank = handResults[i].rank;
+    }
+    const winners = [];
+    for (let i = 0; i < handResults.length; i++) {
+      if (handResults[i].rank === maxRank) winners.push(i);
+    }
+    return winners;
+  }
+
+  // ---- Public API ----
+
+  return {
+    evaluateHand,
+    compareHands,
+    determineWinners,
+    // Exposed for testing
+    evaluate5,
+    parseCard,
+    HAND_TYPES,
+    RANK_VALUES
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = HandEvaluator;
+} else if (typeof window !== "undefined") {
+  window.HandEvaluator = HandEvaluator;
+}
+
+
+// ---- equity_engine.js ----
+// Equity Engine — Texas Hold'em equity calculator
+// Given hero's hand, villain ranges, and board, compute true multiway equity.
+// Postflop: exact enumeration. Preflop or multiway: Monte Carlo.
+
+const EquityEngine = (() => {
+  "use strict";
+
+  // Lazy-load HandEvaluator (works in node, browser, and worker contexts)
+  function getHE() {
+    if (typeof HandEvaluator !== "undefined") return HandEvaluator;
+    if (typeof window !== "undefined" && window.HandEvaluator) return window.HandEvaluator;
+    if (typeof require !== "undefined") return require("./hand_evaluator.js");
+    throw new Error("HandEvaluator not available");
+  }
+
+  // ---- Deck ----
+
+  const ALL_CARDS = (() => {
+    const ranks = "23456789TJQKA";
+    const suits = "hsdc";
+    const deck = [];
+    for (const r of ranks) {
+      for (const s of suits) {
+        deck.push(r + s);
+      }
+    }
+    return deck;
+  })();
+
+  function removeFromDeck(deck, cards) {
+    const removed = new Set(cards.map(c => c.toLowerCase()));
+    return deck.filter(c => !removed.has(c.toLowerCase()));
+  }
+
+  // ---- Range Expansion ----
+  // A range is an array of combos, each combo is ["Ah", "Ks"].
+  // The 13x13 grid (when we build it) expands to this flat combo list.
+
+  function filterBlockedCombos(combos, blockedCards) {
+    const blocked = new Set(blockedCards.map(c => c.toLowerCase()));
+    return combos.filter(combo => {
+      return !combo.some(card => blocked.has(card.toLowerCase()));
+    });
+  }
+
+  // ---- Runout Enumeration ----
+
+  function* enumerateRunouts(deck, cardsNeeded) {
+    // Generate all possible runout combinations of `cardsNeeded` cards from deck
+    if (cardsNeeded === 0) {
+      yield [];
+      return;
+    }
+    if (cardsNeeded === 1) {
+      for (const c of deck) yield [c];
+      return;
+    }
+    if (cardsNeeded === 2) {
+      for (let i = 0; i < deck.length; i++) {
+        for (let j = i + 1; j < deck.length; j++) {
+          yield [deck[i], deck[j]];
+        }
+      }
+      return;
+    }
+    // For 3+ cards (preflop), Monte Carlo is used instead
+    throw new Error("Exact enumeration only supports 0-2 cards remaining");
+  }
+
+  // ---- Card Collision Check ----
+
+  function hasCollision(cardArrays) {
+    // cardArrays is an array of string arrays. Returns true if any card appears twice.
+    const seen = new Set();
+    for (const arr of cardArrays) {
+      for (const c of arr) {
+        const key = c.toLowerCase();
+        if (seen.has(key)) return true;
+        seen.add(key);
+      }
+    }
+    return false;
+  }
+
+  // ---- Exact Enumeration (postflop) ----
+
+  function calculateExact({ heroCards, villainRanges, board }) {
+    const HE = getHE();
+    const boardLen = board.length;
+
+    if (boardLen < 3) {
+      throw new Error("Exact enumeration requires flop+ (3+ board cards)");
+    }
+
+    // Determine cards needed to complete the board
+    const cardsNeeded = 5 - boardLen;
+
+    // Expand/filter villain ranges — remove combos blocked by hero and board
+    const knownCards = [...heroCards, ...board];
+    const filteredRanges = villainRanges.map(range =>
+      filterBlockedCombos(range, knownCards)
+    );
+
+    // If any villain has no combos, bail
+    if (filteredRanges.some(r => r.length === 0)) {
+      return {
+        equities: [0, ...villainRanges.map(() => 0)],
+        evaluations: 0,
+        error: "A villain has no combos after removing blocked cards"
+      };
+    }
+
+    // Counters per player
+    const numPlayers = 1 + villainRanges.length;
+    const equityPoints = new Array(numPlayers).fill(0);
+    let totalEvals = 0;
+
+    // Build the remaining deck (without hero cards or board)
+    const deck = removeFromDeck(ALL_CARDS, knownCards);
+
+    // Enumerate all valid villain combo assignments
+    // For 1 villain: iterate combos
+    // For 2+ villains: nested iteration with card collision rejection
+    const villainCombos = filteredRanges;
+
+    function* enumerateAssignments(idx, current) {
+      if (idx === villainCombos.length) {
+        yield current;
+        return;
+      }
+      for (const combo of villainCombos[idx]) {
+        // Check for collision with previously assigned combos
+        const collisionCheck = [...current, combo];
+        if (!hasCollision(collisionCheck)) {
+          yield* enumerateAssignments(idx + 1, collisionCheck);
+        }
+      }
+    }
+
+    // For each valid villain combo assignment
+    for (const assignment of enumerateAssignments(0, [])) {
+      // Remove all villain combo cards from deck for runout enumeration
+      const villainCards = assignment.flat();
+      const runoutDeck = removeFromDeck(deck, villainCards);
+
+      // For each possible runout
+      for (const runout of enumerateRunouts(runoutDeck, cardsNeeded)) {
+        const completeBoard = [...board, ...runout];
+
+        // Evaluate hero
+        const heroResult = HE.evaluateHand([...heroCards, ...completeBoard]);
+
+        // Evaluate each villain
+        const results = [heroResult];
+        for (const combo of assignment) {
+          results.push(HE.evaluateHand([...combo, ...completeBoard]));
+        }
+
+        // Determine winners
+        const winners = HE.determineWinners(results);
+        const share = 1 / winners.length;
+        for (const w of winners) {
+          equityPoints[w] += share;
+        }
+        totalEvals++;
+      }
+    }
+
+    // Convert to percentages
+    const equities = equityPoints.map(p => totalEvals > 0 ? (p / totalEvals) * 100 : 0);
+    return { equities, evaluations: totalEvals };
+  }
+
+  // ---- Monte Carlo (preflop or multiway) ----
+
+  function calculateMonteCarlo({ heroCards, villainRanges, board, samples }) {
+    const HE = getHE();
+    samples = samples || 50000;
+    const boardLen = board.length;
+    const cardsNeeded = 5 - boardLen;
+
+    const knownCards = [...heroCards, ...board];
+    const filteredRanges = villainRanges.map(range =>
+      filterBlockedCombos(range, knownCards)
+    );
+
+    if (filteredRanges.some(r => r.length === 0)) {
+      return {
+        equities: [0, ...villainRanges.map(() => 0)],
+        evaluations: 0,
+        error: "A villain has no combos after removing blocked cards"
+      };
+    }
+
+    const numPlayers = 1 + villainRanges.length;
+    const equityPoints = new Array(numPlayers).fill(0);
+    let totalEvals = 0;
+    let rejections = 0;
+    const maxRejections = samples * 10; // safety valve
+
+    const deck = removeFromDeck(ALL_CARDS, knownCards);
+
+    while (totalEvals < samples && rejections < maxRejections) {
+      // Pick random combos for each villain
+      const assignment = [];
+      let collision = false;
+      for (const range of filteredRanges) {
+        const combo = range[Math.floor(Math.random() * range.length)];
+        assignment.push(combo);
+      }
+
+      // Check for cross-villain and hero card collisions
+      if (hasCollision([heroCards, ...assignment])) {
+        rejections++;
+        continue;
+      }
+
+      // Remove villain cards from deck for runout
+      const villainCards = assignment.flat();
+      const runoutDeck = removeFromDeck(deck, villainCards);
+
+      // Random runout
+      const runout = sampleWithoutReplacement(runoutDeck, cardsNeeded);
+      const completeBoard = [...board, ...runout];
+
+      // Evaluate
+      const heroResult = HE.evaluateHand([...heroCards, ...completeBoard]);
+      const results = [heroResult];
+      for (const combo of assignment) {
+        results.push(HE.evaluateHand([...combo, ...completeBoard]));
+      }
+
+      const winners = HE.determineWinners(results);
+      const share = 1 / winners.length;
+      for (const w of winners) {
+        equityPoints[w] += share;
+      }
+      totalEvals++;
+    }
+
+    const equities = equityPoints.map(p => totalEvals > 0 ? (p / totalEvals) * 100 : 0);
+    return {
+      equities,
+      evaluations: totalEvals,
+      rejections,
+      monteCarlo: true
+    };
+  }
+
+  function sampleWithoutReplacement(deck, n) {
+    const result = [];
+    const available = deck.slice();
+    for (let i = 0; i < n; i++) {
+      if (available.length === 0) break;
+      const idx = Math.floor(Math.random() * available.length);
+      result.push(available[idx]);
+      available.splice(idx, 1);
+    }
+    return result;
+  }
+
+  // ---- Main Entry ----
+
+  function calculateEquity({ heroCards, villainRanges, board, samples, forceMonteCarlo }) {
+    board = board || [];
+    villainRanges = villainRanges || [];
+
+    if (!heroCards || heroCards.length !== 2) {
+      throw new Error("Hero must have exactly 2 hole cards");
+    }
+
+    const startTime = Date.now();
+
+    // Decision: exact vs Monte Carlo
+    // Exact when: postflop (3+ board cards) AND single villain OR few enough combos
+    const useExact = !forceMonteCarlo &&
+                     board.length >= 3 &&
+                     villainRanges.length === 1;
+
+    // River: special case, just evaluate once
+    if (board.length === 5 && villainRanges.length === 1) {
+      // Filter villain range
+      const HE = getHE();
+      const knownCards = [...heroCards, ...board];
+      const filtered = filterBlockedCombos(villainRanges[0], knownCards);
+
+      if (filtered.length === 0) {
+        return { equities: [0, 0], evaluations: 0, error: "No valid combos" };
+      }
+
+      let heroPts = 0;
+      let villainPts = 0;
+      const heroResult = HE.evaluateHand([...heroCards, ...board]);
+
+      for (const combo of filtered) {
+        const vResult = HE.evaluateHand([...combo, ...board]);
+        const winners = HE.determineWinners([heroResult, vResult]);
+        if (winners.length === 2) {
+          heroPts += 0.5;
+          villainPts += 0.5;
+        } else if (winners[0] === 0) {
+          heroPts += 1;
+        } else {
+          villainPts += 1;
+        }
+      }
+
+      const total = filtered.length;
+      return {
+        equities: [(heroPts / total) * 100, (villainPts / total) * 100],
+        evaluations: total,
+        elapsed: Date.now() - startTime
+      };
+    }
+
+    let result;
+    if (useExact) {
+      result = calculateExact({ heroCards, villainRanges, board });
+    } else {
+      result = calculateMonteCarlo({ heroCards, villainRanges, board, samples });
+    }
+
+    result.elapsed = Date.now() - startTime;
+    return result;
+  }
+
+  // ---- Range Helpers ----
+
+  // Expand a 13x13 grid cell to its combos
+  // Grid coords: row = first rank (0=A, 1=K, ..., 12=2), col = second rank
+  // Diagonal: pairs. Above: suited. Below: offsuit.
+  function expandGridCell(row, col) {
+    const RANKS = "AKQJT98765432";
+    const r1 = RANKS[row];
+    const r2 = RANKS[col];
+    const suits = ["h", "s", "d", "c"];
+    const combos = [];
+
+    if (row === col) {
+      // Pair — 6 combos
+      for (let i = 0; i < 4; i++) {
+        for (let j = i + 1; j < 4; j++) {
+          combos.push([r1 + suits[i], r1 + suits[j]]);
+        }
+      }
+    } else if (row < col) {
+      // Suited (row rank is higher since AKQ... is high-to-low indexed)
+      for (const s of suits) {
+        combos.push([r1 + s, r2 + s]);
+      }
+    } else {
+      // Offsuit
+      for (const s1 of suits) {
+        for (const s2 of suits) {
+          if (s1 !== s2) combos.push([r2 + s1, r1 + s2]);
+          // r2 is the lower rank (row > col means r2 is listed as the higher)
+          // Wait: AKQJT98765432, row=0 is A, row=12 is 2
+          // row > col means row comes later → row is lower rank
+          // So r1 is LOWER, r2 is HIGHER. Let me fix.
+        }
+      }
+    }
+    return combos;
+  }
+
+  // Proper grid cell expansion
+  function expandCell(row, col) {
+    const RANKS = "AKQJT98765432";
+    const suits = ["h", "s", "d", "c"];
+    const combos = [];
+
+    if (row === col) {
+      // Pair
+      const r = RANKS[row];
+      for (let i = 0; i < 4; i++) {
+        for (let j = i + 1; j < 4; j++) {
+          combos.push([r + suits[i], r + suits[j]]);
+        }
+      }
+    } else {
+      // Figure out high and low rank
+      // Lower row index = higher rank (A is at 0)
+      const highIdx = Math.min(row, col);
+      const lowIdx = Math.max(row, col);
+      const highR = RANKS[highIdx];
+      const lowR = RANKS[lowIdx];
+
+      if (row < col) {
+        // Suited (above diagonal)
+        for (const s of suits) {
+          combos.push([highR + s, lowR + s]);
+        }
+      } else {
+        // Offsuit (below diagonal)
+        for (const s1 of suits) {
+          for (const s2 of suits) {
+            if (s1 !== s2) {
+              combos.push([highR + s1, lowR + s2]);
+            }
+          }
+        }
+      }
+    }
+    return combos;
+  }
+
+  function expandRangeFromGrid(grid) {
+    // grid is 13x13 boolean matrix
+    const combos = [];
+    for (let row = 0; row < 13; row++) {
+      for (let col = 0; col < 13; col++) {
+        if (grid[row] && grid[row][col]) {
+          combos.push(...expandCell(row, col));
+        }
+      }
+    }
+    return combos;
+  }
+
+  // ---- Public API ----
+
+  return {
+    calculateEquity,
+    calculateExact,
+    calculateMonteCarlo,
+    filterBlockedCombos,
+    expandCell,
+    expandRangeFromGrid,
+    ALL_CARDS
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = EquityEngine;
+} else if (typeof window !== "undefined") {
+  window.EquityEngine = EquityEngine;
+}
+
+
+// ---- equity_calculator.js ----
+// Equity Calculator — async wrapper that keeps the UI responsive
+// Runs calculations in small chunks using setTimeout to yield to the event loop.
+// Not a true Web Worker, but achieves the same UX: non-blocking UI + progress updates.
+
+const EquityCalculator = (() => {
+  "use strict";
+
+  let cancelled = false;
+
+  function getEE() {
+    if (typeof EquityEngine !== "undefined") return EquityEngine;
+    if (typeof window !== "undefined" && window.EquityEngine) return window.EquityEngine;
+    throw new Error("EquityEngine not available");
+  }
+
+  function getHE() {
+    if (typeof HandEvaluator !== "undefined") return HandEvaluator;
+    if (typeof window !== "undefined" && window.HandEvaluator) return window.HandEvaluator;
+    throw new Error("HandEvaluator not available");
+  }
+
+  // Exact enumeration is fast (<100ms for flop) — run synchronously
+  function calculateExact(input) {
+    const EE = getEE();
+    return Promise.resolve(EE.calculateExact(input));
+  }
+
+  // River is trivially fast — also synchronous
+  function calculateRiver(input) {
+    const EE = getEE();
+    return Promise.resolve(EE.calculateEquity(input));
+  }
+
+  // Monte Carlo: run in chunks of 2000 samples, yielding to event loop between chunks
+  function calculateMonteCarloChunked(input, onProgress) {
+    return new Promise((resolve, reject) => {
+      const EE = getEE();
+      const HE = getHE();
+      cancelled = false;
+      const chunkSize = 2000;
+      const totalSamples = input.samples || 50000;
+
+      const knownCards = [...input.heroCards, ...(input.board || [])];
+      const filtered = input.villainRanges.map(range =>
+        EE.filterBlockedCombos(range, knownCards)
+      );
+
+      if (filtered.some(r => r.length === 0)) {
+        resolve({
+          equities: [0, ...input.villainRanges.map(() => 0)],
+          evaluations: 0,
+          error: "A villain has no valid combos after removing blocked cards"
+        });
+        return;
+      }
+
+      const numPlayers = 1 + input.villainRanges.length;
+      const equityPoints = new Array(numPlayers).fill(0);
+      let totalEvals = 0;
+      let rejections = 0;
+
+      const RANKS = "23456789TJQKA";
+      const SUITS = "hsdc";
+      const fullDeck = [];
+      for (const r of RANKS) for (const s of SUITS) fullDeck.push(r + s);
+      const knownSet = new Set(knownCards.map(c => c.toLowerCase()));
+      const availableDeck = fullDeck.filter(c => !knownSet.has(c.toLowerCase()));
+      const cardsNeeded = 5 - (input.board || []).length;
+
+      const startTime = Date.now();
+
+      function runChunk() {
+        if (cancelled) {
+          resolve({ cancelled: true, evaluations: totalEvals });
+          return;
+        }
+
+        const chunkStart = totalEvals;
+        const chunkEnd = Math.min(totalEvals + chunkSize, totalSamples);
+        const maxRejections = totalSamples * 10;
+
+        while (totalEvals < chunkEnd && rejections < maxRejections) {
+          const assignment = [];
+          for (const range of filtered) {
+            assignment.push(range[Math.floor(Math.random() * range.length)]);
+          }
+
+          if (hasCollision([input.heroCards, ...assignment])) {
+            rejections++;
+            continue;
+          }
+
+          const usedInHoles = new Set();
+          for (const arr of [input.heroCards, ...assignment]) {
+            for (const c of arr) usedInHoles.add(c.toLowerCase());
+          }
+          const runoutDeck = availableDeck.filter(c => !usedInHoles.has(c.toLowerCase()));
+
+          const runout = [];
+          const deckCopy = runoutDeck.slice();
+          for (let i = 0; i < cardsNeeded; i++) {
+            if (deckCopy.length === 0) break;
+            const idx = Math.floor(Math.random() * deckCopy.length);
+            runout.push(deckCopy[idx]);
+            deckCopy.splice(idx, 1);
+          }
+
+          const completeBoard = [...(input.board || []), ...runout];
+          const heroResult = HE.evaluateHand([...input.heroCards, ...completeBoard]);
+          const results = [heroResult];
+          for (const combo of assignment) {
+            results.push(HE.evaluateHand([...combo, ...completeBoard]));
+          }
+
+          const winners = HE.determineWinners(results);
+          const share = 1 / winners.length;
+          for (const w of winners) equityPoints[w] += share;
+          totalEvals++;
+        }
+
+        // Progress update
+        if (onProgress) {
+          const partialEquities = equityPoints.map(p => totalEvals > 0 ? (p / totalEvals) * 100 : 0);
+          onProgress({
+            equities: partialEquities,
+            samplesComplete: totalEvals,
+            samplesTotal: totalSamples
+          });
+        }
+
+        if (totalEvals < totalSamples && rejections < maxRejections) {
+          // Schedule next chunk
+          setTimeout(runChunk, 0);
+        } else {
+          // Done
+          const equities = equityPoints.map(p => totalEvals > 0 ? (p / totalEvals) * 100 : 0);
+          resolve({
+            equities,
+            evaluations: totalEvals,
+            rejections,
+            monteCarlo: true,
+            elapsed: Date.now() - startTime
+          });
+        }
+      }
+
+      runChunk();
+    });
+  }
+
+  function hasCollision(cardArrays) {
+    const seen = new Set();
+    for (const arr of cardArrays) {
+      for (const c of arr) {
+        const key = c.toLowerCase();
+        if (seen.has(key)) return true;
+        seen.add(key);
+      }
+    }
+    return false;
+  }
+
+  // Main entry point
+  function calculate(input, onProgress) {
+    input = input || {};
+    const board = input.board || [];
+
+    // Route based on street and player count
+    if (board.length === 5) {
+      return calculateRiver(input);
+    }
+
+    if (!input.forceMonteCarlo && board.length >= 3 && input.villainRanges.length === 1) {
+      // Exact enumeration for heads-up flop/turn
+      return calculateExact(input);
+    }
+
+    // Otherwise Monte Carlo with chunked progress
+    return calculateMonteCarloChunked(input, onProgress);
+  }
+
+  function cancel() {
+    cancelled = true;
+  }
+
+  return {
+    calculate,
+    cancel,
+    isWorkerAvailable: () => true // Always works via setTimeout chunking
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = EquityCalculator;
+} else if (typeof window !== "undefined") {
+  window.EquityCalculator = EquityCalculator;
+}
+
+
 // ---- pokerstars_exporter.js ----
 // PokerStars Hand History Exporter
 // Converts our internal session format to PokerStars HH text format.
@@ -5791,7 +6928,9 @@ if (typeof module !== "undefined" && module.exports) {
     knownVillainCards: {},
     currentStreet: "preflop",
     actionCallouts: {},            // { seat: { action, amount, timer } }
-    previousStacks: null           // { seat: stack } — for delta display, null = suppress deltas
+    previousStacks: null,          // { seat: stack } — for delta display, null = suppress deltas
+    equityRanges: {},              // { [handIdx]: { [villainSeat]: grid13x13 } }
+    equityPanelOpen: false
   };
 
   // ---- DOM Refs ----
@@ -5897,6 +7036,13 @@ if (typeof module !== "undefined" && module.exports) {
     btnNewRiver: document.getElementById("btnNewRiver"),
     btnPrevHand: document.getElementById("btnPrevHand"),
     btnNextHand: document.getElementById("btnNextHand"),
+    btnEquity: document.getElementById("btnEquity"),
+    equityPanel: document.getElementById("equityPanel"),
+    equityCloseBtn: document.getElementById("equityCloseBtn"),
+    equityHeroCards: document.getElementById("equityHeroCards"),
+    equityBoardCards: document.getElementById("equityBoardCards"),
+    equityResults: document.getElementById("equityResults"),
+    equityGrids: document.getElementById("equityGrids"),
     seatElements: []
   };
 
@@ -5909,6 +7055,9 @@ if (typeof module !== "undefined" && module.exports) {
     els.qaScreen.classList.toggle("active", name === "qa");
     els.reviewScreen.classList.toggle("active", name === "review");
     els.learnScreen.classList.toggle("active", name === "learn");
+    if (name !== "playback" && playback.equityPanelOpen) {
+      closeEquityPanel();
+    }
   }
 
   // ---- Seat Rendering ----
@@ -6269,6 +7418,11 @@ if (typeof module !== "undefined" && module.exports) {
     updateActionButtons();
     updateSeatBetChips();
     renderDealerButton();
+    if (playback.equityPanelOpen && typeof renderEquityPanel === "function") {
+      // Update the hero/board context lines, but don't recompute blocked grids unless needed
+      els.equityHeroCards.textContent = (playback.heroCards || []).join(" ") || "--";
+      els.equityBoardCards.textContent = (playback.board || []).join(" ") || "--";
+    }
   }
 
   // ---- Action Callouts ----
@@ -6796,6 +7950,7 @@ if (typeof module !== "undefined" && module.exports) {
 
     renderHandList();
     render();
+    if (typeof onHandChangedForEquity === "function") onHandChangedForEquity();
   }
 
   // ---- Script Playback ----
@@ -7726,6 +8881,350 @@ if (typeof module !== "undefined" && module.exports) {
     els.learnProfileList.textContent = profiles.length ? profiles.join(", ") : "(none saved)";
   }
 
+  // ---- Equity Calculator UI ----
+
+  const RANK_LABELS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
+
+  function makeEmptyGrid() {
+    const g = [];
+    for (let r = 0; r < 13; r++) {
+      const row = [];
+      for (let c = 0; c < 13; c++) row.push(false);
+      g.push(row);
+    }
+    return g;
+  }
+
+  function cellLabel(row, col) {
+    if (row === col) return RANK_LABELS[row] + RANK_LABELS[row];
+    const highIdx = Math.min(row, col);
+    const lowIdx = Math.max(row, col);
+    const hi = RANK_LABELS[highIdx];
+    const lo = RANK_LABELS[lowIdx];
+    return row < col ? (hi + lo + "s") : (hi + lo + "o");
+  }
+
+  function countGridCombos(grid) {
+    let count = 0;
+    for (let r = 0; r < 13; r++) {
+      for (let c = 0; c < 13; c++) {
+        if (grid[r][c]) {
+          if (r === c) count += 6;
+          else if (r < c) count += 4;
+          else count += 12;
+        }
+      }
+    }
+    return count;
+  }
+
+  function getBlockedCards() {
+    const blocked = [];
+    for (const c of (playback.heroCards || [])) blocked.push(c);
+    for (const c of (playback.board || [])) blocked.push(c);
+    return blocked;
+  }
+
+  function isCellFullyBlocked(row, col, blocked) {
+    if (!window.EquityEngine) return false;
+    const combos = window.EquityEngine.expandCell(row, col);
+    if (!combos.length) return true;
+    const blockedSet = new Set(blocked.map(c => c.toLowerCase()));
+    for (const combo of combos) {
+      const hasCollision = combo.some(card => blockedSet.has(card.toLowerCase()));
+      if (!hasCollision) return false;
+    }
+    return true;
+  }
+
+  function getActiveVillains() {
+    const villains = [];
+    const heroSeat = playback.tableState ? playback.tableState.heroSeat : -1;
+    for (const p of (playback.players || [])) {
+      if (p.seat === heroSeat) continue;
+      if (p.status === "active" || p.status === "allin") {
+        villains.push(p);
+      }
+    }
+    return villains;
+  }
+
+  function ensureHandRanges(handIdx) {
+    if (!playback.equityRanges[handIdx]) {
+      playback.equityRanges[handIdx] = {};
+    }
+    return playback.equityRanges[handIdx];
+  }
+
+  function getRangeForSeat(handIdx, seat) {
+    const handRanges = ensureHandRanges(handIdx);
+    if (!handRanges[seat]) handRanges[seat] = makeEmptyGrid();
+    return handRanges[seat];
+  }
+
+  let equityDebounceTimer = 0;
+  let equityDragging = false;
+  let equityDragMode = null;   // true = selecting, false = deselecting
+  let equityDragGrid = null;
+  let equityDragBlocked = null;
+  let equityDragTouched = null;
+  let equityLastResult = null;
+
+  function renderEquityPanel() {
+    if (!playback.equityPanelOpen) return;
+    const heroCardsText = (playback.heroCards || []).join(" ") || "--";
+    const boardText = (playback.board || []).join(" ") || "--";
+    els.equityHeroCards.textContent = heroCardsText;
+    els.equityBoardCards.textContent = boardText;
+
+    const villains = getActiveVillains();
+    const blocked = getBlockedCards();
+
+    // Build grids
+    els.equityGrids.innerHTML = "";
+    if (!villains.length) {
+      const empty = document.createElement("div");
+      empty.className = "equity-status";
+      empty.textContent = "No active villains in this hand.";
+      els.equityGrids.appendChild(empty);
+    } else {
+      villains.forEach((v, vIdx) => {
+        const grid = getRangeForSeat(playback.currentHandIndex, v.seat);
+        const block = buildGridBlock(v, vIdx, grid, blocked);
+        els.equityGrids.appendChild(block);
+      });
+    }
+
+    // Show stored equity results if present
+    renderEquityResults();
+
+    // Trigger calc
+    scheduleEquityCalc();
+  }
+
+  function buildGridBlock(villain, vIdx, grid, blocked) {
+    const block = document.createElement("div");
+    block.className = "equity-grid-block";
+    block.dataset.seat = String(villain.seat);
+
+    const header = document.createElement("div");
+    header.className = "equity-grid-header";
+    const title = document.createElement("span");
+    title.className = "equity-grid-title";
+    title.textContent = (villain.name || `Villain`) + ` - Seat ${villain.seat + 1}`;
+    const count = document.createElement("span");
+    count.className = "equity-grid-count";
+    header.appendChild(title);
+    header.appendChild(count);
+    block.appendChild(header);
+
+    const gridEl = document.createElement("div");
+    gridEl.className = "equity-grid";
+
+    function updateCount() {
+      const combos = countGridCombos(grid);
+      const pct = (combos / 1326 * 100).toFixed(1);
+      count.textContent = `${combos} combos (${pct}%)`;
+    }
+
+    function refreshCells() {
+      const cells = gridEl.querySelectorAll(".equity-grid-cell");
+      cells.forEach(cell => {
+        const r = Number(cell.dataset.row);
+        const c = Number(cell.dataset.col);
+        cell.classList.toggle("selected", !!grid[r][c]);
+      });
+      updateCount();
+    }
+
+    for (let r = 0; r < 13; r++) {
+      for (let c = 0; c < 13; c++) {
+        const cell = document.createElement("div");
+        cell.className = "equity-grid-cell";
+        cell.dataset.row = String(r);
+        cell.dataset.col = String(c);
+        cell.textContent = cellLabel(r, c);
+        const blockedCell = isCellFullyBlocked(r, c, blocked);
+        if (blockedCell) cell.classList.add("blocked");
+        if (grid[r][c]) cell.classList.add("selected");
+
+        cell.addEventListener("mousedown", (e) => {
+          if (cell.classList.contains("blocked")) return;
+          e.preventDefault();
+          equityDragging = true;
+          equityDragMode = !grid[r][c];
+          equityDragGrid = grid;
+          equityDragBlocked = blocked;
+          equityDragTouched = new Set();
+          applyDragToCell(cell, r, c, grid);
+          refreshCells();
+          scheduleEquityCalc();
+        });
+        cell.addEventListener("mouseenter", () => {
+          if (!equityDragging || equityDragGrid !== grid) return;
+          if (cell.classList.contains("blocked")) return;
+          applyDragToCell(cell, r, c, grid);
+          refreshCells();
+        });
+        gridEl.appendChild(cell);
+      }
+    }
+    block.appendChild(gridEl);
+
+    const actions = document.createElement("div");
+    actions.className = "equity-grid-actions";
+    const selectAllBtn = document.createElement("button");
+    selectAllBtn.textContent = "Select All";
+    selectAllBtn.addEventListener("click", () => {
+      for (let r = 0; r < 13; r++)
+        for (let c = 0; c < 13; c++)
+          if (!isCellFullyBlocked(r, c, blocked)) grid[r][c] = true;
+      refreshCells();
+      scheduleEquityCalc();
+    });
+    const clearBtn = document.createElement("button");
+    clearBtn.textContent = "Clear";
+    clearBtn.addEventListener("click", () => {
+      for (let r = 0; r < 13; r++)
+        for (let c = 0; c < 13; c++) grid[r][c] = false;
+      refreshCells();
+      scheduleEquityCalc();
+    });
+    actions.appendChild(selectAllBtn);
+    actions.appendChild(clearBtn);
+    block.appendChild(actions);
+
+    updateCount();
+    return block;
+  }
+
+  function applyDragToCell(cell, r, c, grid) {
+    const key = r + "," + c;
+    if (equityDragTouched.has(key)) return;
+    equityDragTouched.add(key);
+    grid[r][c] = equityDragMode;
+  }
+
+  // Global mouseup to end dragging
+  document.addEventListener("mouseup", () => {
+    if (equityDragging) {
+      equityDragging = false;
+      equityDragGrid = null;
+      equityDragTouched = null;
+      scheduleEquityCalc();
+    }
+  });
+
+  function scheduleEquityCalc() {
+    if (!playback.equityPanelOpen) return;
+    if (equityDebounceTimer) clearTimeout(equityDebounceTimer);
+    equityDebounceTimer = setTimeout(runEquityCalc, 300);
+  }
+
+  function runEquityCalc() {
+    if (!playback.equityPanelOpen) return;
+    const EC = window.EquityCalculator;
+    const EE = window.EquityEngine;
+    if (!EC || !EE) {
+      setEquityStatus("Equity engine not loaded.");
+      return;
+    }
+    const heroCards = playback.heroCards || [];
+    if (heroCards.length !== 2) {
+      setEquityStatus("Hero cards not known.");
+      return;
+    }
+    const villains = getActiveVillains();
+    if (!villains.length) {
+      setEquityStatus("No villains to compute equity against.");
+      return;
+    }
+    const handIdx = playback.currentHandIndex;
+    const villainRanges = [];
+    let hasEmpty = false;
+    for (const v of villains) {
+      const grid = getRangeForSeat(handIdx, v.seat);
+      const combos = EE.expandRangeFromGrid(grid);
+      if (!combos.length) hasEmpty = true;
+      villainRanges.push(combos);
+    }
+    if (hasEmpty) {
+      setEquityStatus("Select a range for each villain.");
+      return;
+    }
+
+    try { EC.cancel(); } catch (e) {}
+
+    setEquityStatus("Calculating...");
+    const board = playback.board || [];
+    const input = {
+      heroCards,
+      villainRanges,
+      board,
+      samples: 20000
+    };
+    const labels = ["Hero", ...villains.map(v => (v.name || `Villain`) + ` (S${v.seat + 1})`)];
+
+    EC.calculate(input, (progress) => {
+      if (!playback.equityPanelOpen) return;
+      if (progress && progress.equities) {
+        renderEquityValues(progress.equities, labels, true);
+      }
+    }).then(result => {
+      if (!playback.equityPanelOpen) return;
+      if (result && result.cancelled) return;
+      equityLastResult = { equities: result.equities, labels };
+      renderEquityValues(result.equities, labels, false);
+    }).catch(err => {
+      setEquityStatus("Error: " + (err && err.message ? err.message : String(err)));
+    });
+  }
+
+  function setEquityStatus(msg) {
+    els.equityResults.innerHTML = `<div class="equity-status">${msg}</div>`;
+  }
+
+  function renderEquityValues(equities, labels, inProgress) {
+    const rows = [];
+    for (let i = 0; i < equities.length; i++) {
+      const cls = i === 0 ? "equity-row hero" : "equity-row";
+      const pct = (equities[i] || 0).toFixed(1);
+      rows.push(`<div class="${cls}"><span class="equity-row-label">${labels[i]}</span><span class="equity-row-value">${pct}%</span></div>`);
+    }
+    const statusLine = inProgress ? `<div class="equity-status" style="margin-top:6px;">Calculating...</div>` : "";
+    els.equityResults.innerHTML = rows.join("") + statusLine;
+  }
+
+  function renderEquityResults() {
+    // Fresh open, no cached; let scheduleEquityCalc handle the compute
+    if (!equityLastResult) {
+      setEquityStatus("Select villain ranges below");
+    }
+  }
+
+  function openEquityPanel() {
+    playback.equityPanelOpen = true;
+    equityLastResult = null;
+    els.equityPanel.style.display = "flex";
+    els.btnEquity.classList.add("active");
+    renderEquityPanel();
+  }
+
+  function closeEquityPanel() {
+    playback.equityPanelOpen = false;
+    els.equityPanel.style.display = "none";
+    els.btnEquity.classList.remove("active");
+    if (window.EquityCalculator) {
+      try { window.EquityCalculator.cancel(); } catch (e) {}
+    }
+  }
+
+  // Refresh when hand changes
+  function onHandChangedForEquity() {
+    equityLastResult = null;
+    if (playback.equityPanelOpen) renderEquityPanel();
+  }
+
   // ---- Event Handlers ----
 
   function setupEvents() {
@@ -7916,6 +9415,13 @@ if (typeof module !== "undefined" && module.exports) {
     els.btnBackToScript.addEventListener("click", backToScript);
     els.btnNextHand.addEventListener("click", () => loadHand(playback.currentHandIndex + 1));
     els.btnPrevHand.addEventListener("click", () => loadHand(playback.currentHandIndex - 1));
+
+    // Equity panel
+    els.btnEquity.addEventListener("click", () => {
+      if (playback.equityPanelOpen) closeEquityPanel();
+      else openEquityPanel();
+    });
+    els.equityCloseBtn.addEventListener("click", closeEquityPanel);
 
     // Action buttons (branch mode)
     els.btnFold.addEventListener("click", () => coachAction("fold", els.btnFold));

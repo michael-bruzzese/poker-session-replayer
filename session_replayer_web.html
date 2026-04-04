@@ -986,6 +986,193 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+  /* ---- Equity Calculator ---- */
+  .equity-toggle-btn {
+    background: #2a4a7f;
+    color: #fff;
+    border: 1px solid #3a5a9f;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .equity-toggle-btn:hover { background: #3a5a9f; }
+  .equity-toggle-btn.active { background: #4a9eff; border-color: #4a9eff; }
+
+  .equity-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 40%;
+    min-width: 480px;
+    max-width: 720px;
+    height: 100vh;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--panel-border);
+    box-shadow: -4px 0 16px rgba(0,0,0,0.5);
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+  }
+  .equity-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--panel-border);
+    flex-shrink: 0;
+  }
+  .equity-panel-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .equity-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 6px;
+  }
+  .equity-close-btn:hover { color: var(--text-primary); }
+  .equity-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+  .equity-context {
+    background: #13131f;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .equity-context-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .equity-context-label {
+    color: var(--text-secondary);
+    width: 50px;
+  }
+  .equity-context-cards {
+    color: var(--text-primary);
+    font-family: "SF Mono", Menlo, monospace;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .equity-results {
+    background: #13131f;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+    min-height: 48px;
+  }
+  .equity-status {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-style: italic;
+  }
+  .equity-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+  }
+  .equity-row-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .equity-row-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .equity-row.hero .equity-row-label { color: #4a9eff; }
+  .equity-row.hero .equity-row-value { color: #4a9eff; }
+
+  .equity-grid-block {
+    margin-bottom: 16px;
+    background: #13131f;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 10px;
+  }
+  .equity-grid-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .equity-grid-title {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .equity-grid-count {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .equity-grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    gap: 1px;
+    user-select: none;
+    max-width: 360px;
+  }
+  .equity-grid-cell {
+    aspect-ratio: 1 / 1;
+    background: #1f1f2e;
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 2px;
+    font-family: "SF Mono", Menlo, monospace;
+    transition: background 0.08s;
+  }
+  .equity-grid-cell:hover { background: #2a2a40; }
+  .equity-grid-cell.selected {
+    background: #2a8f2a;
+    color: #fff;
+  }
+  .equity-grid-cell.selected:hover { background: #34a834; }
+  .equity-grid-cell.blocked {
+    background: #2a2a2a;
+    color: #555;
+    cursor: not-allowed;
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+  .equity-grid-cell.blocked:hover { background: #2a2a2a; }
+  .equity-grid-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .equity-grid-actions button {
+    background: #2a2a3e;
+    color: var(--text-primary);
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .equity-grid-actions button:hover { background: #3a3a4e; }
 </style>
 </head>
 <body>
@@ -1221,6 +1408,9 @@
           <span class="status-label">Pot</span>
           <span id="statusPot" class="status-value">0</span>
         </div>
+        <div class="status-item" style="margin-left:auto;">
+          <button id="btnEquity" class="equity-toggle-btn" title="Open equity calculator">Equity</button>
+        </div>
       </div>
 
       <!-- Action Bar -->
@@ -1258,6 +1448,30 @@
 
     </div>
   </div>
+
+  <!-- Equity Side Panel -->
+  <div id="equityPanel" class="equity-panel" style="display:none;">
+    <div class="equity-panel-header">
+      <h3>Equity Calculator</h3>
+      <button id="equityCloseBtn" class="equity-close-btn" title="Close">&times;</button>
+    </div>
+    <div class="equity-panel-body">
+      <div class="equity-context">
+        <div class="equity-context-row">
+          <span class="equity-context-label">Hero</span>
+          <span id="equityHeroCards" class="equity-context-cards">--</span>
+        </div>
+        <div class="equity-context-row">
+          <span class="equity-context-label">Board</span>
+          <span id="equityBoardCards" class="equity-context-cards">--</span>
+        </div>
+      </div>
+      <div id="equityResults" class="equity-results">
+        <div class="equity-status" id="equityStatus">Select villain ranges below</div>
+      </div>
+      <div id="equityGrids" class="equity-grids"></div>
+    </div>
+  </div>
 </div>
 
 <!-- JSZip for .docx file reading (inlined by build script) -->
@@ -1272,6 +1486,9 @@
 <script src="shared/session_storage.js"></script>
 <script src="shared/llm_adapter.js"></script>
 <script src="shared/parse_prompt.js"></script>
+<script src="shared/hand_evaluator.js"></script>
+<script src="shared/equity_engine.js"></script>
+<script src="shared/equity_calculator.js"></script>
 <script src="shared/pokerstars_exporter.js"></script>
 <!-- SHARED_ENGINE_END -->
 <script>
@@ -1327,7 +1544,9 @@
     knownVillainCards: {},
     currentStreet: "preflop",
     actionCallouts: {},            // { seat: { action, amount, timer } }
-    previousStacks: null           // { seat: stack } — for delta display, null = suppress deltas
+    previousStacks: null,          // { seat: stack } — for delta display, null = suppress deltas
+    equityRanges: {},              // { [handIdx]: { [villainSeat]: grid13x13 } }
+    equityPanelOpen: false
   };
 
   // ---- DOM Refs ----
@@ -1433,6 +1652,13 @@
     btnNewRiver: document.getElementById("btnNewRiver"),
     btnPrevHand: document.getElementById("btnPrevHand"),
     btnNextHand: document.getElementById("btnNextHand"),
+    btnEquity: document.getElementById("btnEquity"),
+    equityPanel: document.getElementById("equityPanel"),
+    equityCloseBtn: document.getElementById("equityCloseBtn"),
+    equityHeroCards: document.getElementById("equityHeroCards"),
+    equityBoardCards: document.getElementById("equityBoardCards"),
+    equityResults: document.getElementById("equityResults"),
+    equityGrids: document.getElementById("equityGrids"),
     seatElements: []
   };
 
@@ -1445,6 +1671,9 @@
     els.qaScreen.classList.toggle("active", name === "qa");
     els.reviewScreen.classList.toggle("active", name === "review");
     els.learnScreen.classList.toggle("active", name === "learn");
+    if (name !== "playback" && playback.equityPanelOpen) {
+      closeEquityPanel();
+    }
   }
 
   // ---- Seat Rendering ----
@@ -1805,6 +2034,11 @@
     updateActionButtons();
     updateSeatBetChips();
     renderDealerButton();
+    if (playback.equityPanelOpen && typeof renderEquityPanel === "function") {
+      // Update the hero/board context lines, but don't recompute blocked grids unless needed
+      els.equityHeroCards.textContent = (playback.heroCards || []).join(" ") || "--";
+      els.equityBoardCards.textContent = (playback.board || []).join(" ") || "--";
+    }
   }
 
   // ---- Action Callouts ----
@@ -2332,6 +2566,7 @@
 
     renderHandList();
     render();
+    if (typeof onHandChangedForEquity === "function") onHandChangedForEquity();
   }
 
   // ---- Script Playback ----
@@ -3262,6 +3497,350 @@
     els.learnProfileList.textContent = profiles.length ? profiles.join(", ") : "(none saved)";
   }
 
+  // ---- Equity Calculator UI ----
+
+  const RANK_LABELS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
+
+  function makeEmptyGrid() {
+    const g = [];
+    for (let r = 0; r < 13; r++) {
+      const row = [];
+      for (let c = 0; c < 13; c++) row.push(false);
+      g.push(row);
+    }
+    return g;
+  }
+
+  function cellLabel(row, col) {
+    if (row === col) return RANK_LABELS[row] + RANK_LABELS[row];
+    const highIdx = Math.min(row, col);
+    const lowIdx = Math.max(row, col);
+    const hi = RANK_LABELS[highIdx];
+    const lo = RANK_LABELS[lowIdx];
+    return row < col ? (hi + lo + "s") : (hi + lo + "o");
+  }
+
+  function countGridCombos(grid) {
+    let count = 0;
+    for (let r = 0; r < 13; r++) {
+      for (let c = 0; c < 13; c++) {
+        if (grid[r][c]) {
+          if (r === c) count += 6;
+          else if (r < c) count += 4;
+          else count += 12;
+        }
+      }
+    }
+    return count;
+  }
+
+  function getBlockedCards() {
+    const blocked = [];
+    for (const c of (playback.heroCards || [])) blocked.push(c);
+    for (const c of (playback.board || [])) blocked.push(c);
+    return blocked;
+  }
+
+  function isCellFullyBlocked(row, col, blocked) {
+    if (!window.EquityEngine) return false;
+    const combos = window.EquityEngine.expandCell(row, col);
+    if (!combos.length) return true;
+    const blockedSet = new Set(blocked.map(c => c.toLowerCase()));
+    for (const combo of combos) {
+      const hasCollision = combo.some(card => blockedSet.has(card.toLowerCase()));
+      if (!hasCollision) return false;
+    }
+    return true;
+  }
+
+  function getActiveVillains() {
+    const villains = [];
+    const heroSeat = playback.tableState ? playback.tableState.heroSeat : -1;
+    for (const p of (playback.players || [])) {
+      if (p.seat === heroSeat) continue;
+      if (p.status === "active" || p.status === "allin") {
+        villains.push(p);
+      }
+    }
+    return villains;
+  }
+
+  function ensureHandRanges(handIdx) {
+    if (!playback.equityRanges[handIdx]) {
+      playback.equityRanges[handIdx] = {};
+    }
+    return playback.equityRanges[handIdx];
+  }
+
+  function getRangeForSeat(handIdx, seat) {
+    const handRanges = ensureHandRanges(handIdx);
+    if (!handRanges[seat]) handRanges[seat] = makeEmptyGrid();
+    return handRanges[seat];
+  }
+
+  let equityDebounceTimer = 0;
+  let equityDragging = false;
+  let equityDragMode = null;   // true = selecting, false = deselecting
+  let equityDragGrid = null;
+  let equityDragBlocked = null;
+  let equityDragTouched = null;
+  let equityLastResult = null;
+
+  function renderEquityPanel() {
+    if (!playback.equityPanelOpen) return;
+    const heroCardsText = (playback.heroCards || []).join(" ") || "--";
+    const boardText = (playback.board || []).join(" ") || "--";
+    els.equityHeroCards.textContent = heroCardsText;
+    els.equityBoardCards.textContent = boardText;
+
+    const villains = getActiveVillains();
+    const blocked = getBlockedCards();
+
+    // Build grids
+    els.equityGrids.innerHTML = "";
+    if (!villains.length) {
+      const empty = document.createElement("div");
+      empty.className = "equity-status";
+      empty.textContent = "No active villains in this hand.";
+      els.equityGrids.appendChild(empty);
+    } else {
+      villains.forEach((v, vIdx) => {
+        const grid = getRangeForSeat(playback.currentHandIndex, v.seat);
+        const block = buildGridBlock(v, vIdx, grid, blocked);
+        els.equityGrids.appendChild(block);
+      });
+    }
+
+    // Show stored equity results if present
+    renderEquityResults();
+
+    // Trigger calc
+    scheduleEquityCalc();
+  }
+
+  function buildGridBlock(villain, vIdx, grid, blocked) {
+    const block = document.createElement("div");
+    block.className = "equity-grid-block";
+    block.dataset.seat = String(villain.seat);
+
+    const header = document.createElement("div");
+    header.className = "equity-grid-header";
+    const title = document.createElement("span");
+    title.className = "equity-grid-title";
+    title.textContent = (villain.name || `Villain`) + ` - Seat ${villain.seat + 1}`;
+    const count = document.createElement("span");
+    count.className = "equity-grid-count";
+    header.appendChild(title);
+    header.appendChild(count);
+    block.appendChild(header);
+
+    const gridEl = document.createElement("div");
+    gridEl.className = "equity-grid";
+
+    function updateCount() {
+      const combos = countGridCombos(grid);
+      const pct = (combos / 1326 * 100).toFixed(1);
+      count.textContent = `${combos} combos (${pct}%)`;
+    }
+
+    function refreshCells() {
+      const cells = gridEl.querySelectorAll(".equity-grid-cell");
+      cells.forEach(cell => {
+        const r = Number(cell.dataset.row);
+        const c = Number(cell.dataset.col);
+        cell.classList.toggle("selected", !!grid[r][c]);
+      });
+      updateCount();
+    }
+
+    for (let r = 0; r < 13; r++) {
+      for (let c = 0; c < 13; c++) {
+        const cell = document.createElement("div");
+        cell.className = "equity-grid-cell";
+        cell.dataset.row = String(r);
+        cell.dataset.col = String(c);
+        cell.textContent = cellLabel(r, c);
+        const blockedCell = isCellFullyBlocked(r, c, blocked);
+        if (blockedCell) cell.classList.add("blocked");
+        if (grid[r][c]) cell.classList.add("selected");
+
+        cell.addEventListener("mousedown", (e) => {
+          if (cell.classList.contains("blocked")) return;
+          e.preventDefault();
+          equityDragging = true;
+          equityDragMode = !grid[r][c];
+          equityDragGrid = grid;
+          equityDragBlocked = blocked;
+          equityDragTouched = new Set();
+          applyDragToCell(cell, r, c, grid);
+          refreshCells();
+          scheduleEquityCalc();
+        });
+        cell.addEventListener("mouseenter", () => {
+          if (!equityDragging || equityDragGrid !== grid) return;
+          if (cell.classList.contains("blocked")) return;
+          applyDragToCell(cell, r, c, grid);
+          refreshCells();
+        });
+        gridEl.appendChild(cell);
+      }
+    }
+    block.appendChild(gridEl);
+
+    const actions = document.createElement("div");
+    actions.className = "equity-grid-actions";
+    const selectAllBtn = document.createElement("button");
+    selectAllBtn.textContent = "Select All";
+    selectAllBtn.addEventListener("click", () => {
+      for (let r = 0; r < 13; r++)
+        for (let c = 0; c < 13; c++)
+          if (!isCellFullyBlocked(r, c, blocked)) grid[r][c] = true;
+      refreshCells();
+      scheduleEquityCalc();
+    });
+    const clearBtn = document.createElement("button");
+    clearBtn.textContent = "Clear";
+    clearBtn.addEventListener("click", () => {
+      for (let r = 0; r < 13; r++)
+        for (let c = 0; c < 13; c++) grid[r][c] = false;
+      refreshCells();
+      scheduleEquityCalc();
+    });
+    actions.appendChild(selectAllBtn);
+    actions.appendChild(clearBtn);
+    block.appendChild(actions);
+
+    updateCount();
+    return block;
+  }
+
+  function applyDragToCell(cell, r, c, grid) {
+    const key = r + "," + c;
+    if (equityDragTouched.has(key)) return;
+    equityDragTouched.add(key);
+    grid[r][c] = equityDragMode;
+  }
+
+  // Global mouseup to end dragging
+  document.addEventListener("mouseup", () => {
+    if (equityDragging) {
+      equityDragging = false;
+      equityDragGrid = null;
+      equityDragTouched = null;
+      scheduleEquityCalc();
+    }
+  });
+
+  function scheduleEquityCalc() {
+    if (!playback.equityPanelOpen) return;
+    if (equityDebounceTimer) clearTimeout(equityDebounceTimer);
+    equityDebounceTimer = setTimeout(runEquityCalc, 300);
+  }
+
+  function runEquityCalc() {
+    if (!playback.equityPanelOpen) return;
+    const EC = window.EquityCalculator;
+    const EE = window.EquityEngine;
+    if (!EC || !EE) {
+      setEquityStatus("Equity engine not loaded.");
+      return;
+    }
+    const heroCards = playback.heroCards || [];
+    if (heroCards.length !== 2) {
+      setEquityStatus("Hero cards not known.");
+      return;
+    }
+    const villains = getActiveVillains();
+    if (!villains.length) {
+      setEquityStatus("No villains to compute equity against.");
+      return;
+    }
+    const handIdx = playback.currentHandIndex;
+    const villainRanges = [];
+    let hasEmpty = false;
+    for (const v of villains) {
+      const grid = getRangeForSeat(handIdx, v.seat);
+      const combos = EE.expandRangeFromGrid(grid);
+      if (!combos.length) hasEmpty = true;
+      villainRanges.push(combos);
+    }
+    if (hasEmpty) {
+      setEquityStatus("Select a range for each villain.");
+      return;
+    }
+
+    try { EC.cancel(); } catch (e) {}
+
+    setEquityStatus("Calculating...");
+    const board = playback.board || [];
+    const input = {
+      heroCards,
+      villainRanges,
+      board,
+      samples: 20000
+    };
+    const labels = ["Hero", ...villains.map(v => (v.name || `Villain`) + ` (S${v.seat + 1})`)];
+
+    EC.calculate(input, (progress) => {
+      if (!playback.equityPanelOpen) return;
+      if (progress && progress.equities) {
+        renderEquityValues(progress.equities, labels, true);
+      }
+    }).then(result => {
+      if (!playback.equityPanelOpen) return;
+      if (result && result.cancelled) return;
+      equityLastResult = { equities: result.equities, labels };
+      renderEquityValues(result.equities, labels, false);
+    }).catch(err => {
+      setEquityStatus("Error: " + (err && err.message ? err.message : String(err)));
+    });
+  }
+
+  function setEquityStatus(msg) {
+    els.equityResults.innerHTML = `<div class="equity-status">${msg}</div>`;
+  }
+
+  function renderEquityValues(equities, labels, inProgress) {
+    const rows = [];
+    for (let i = 0; i < equities.length; i++) {
+      const cls = i === 0 ? "equity-row hero" : "equity-row";
+      const pct = (equities[i] || 0).toFixed(1);
+      rows.push(`<div class="${cls}"><span class="equity-row-label">${labels[i]}</span><span class="equity-row-value">${pct}%</span></div>`);
+    }
+    const statusLine = inProgress ? `<div class="equity-status" style="margin-top:6px;">Calculating...</div>` : "";
+    els.equityResults.innerHTML = rows.join("") + statusLine;
+  }
+
+  function renderEquityResults() {
+    // Fresh open, no cached; let scheduleEquityCalc handle the compute
+    if (!equityLastResult) {
+      setEquityStatus("Select villain ranges below");
+    }
+  }
+
+  function openEquityPanel() {
+    playback.equityPanelOpen = true;
+    equityLastResult = null;
+    els.equityPanel.style.display = "flex";
+    els.btnEquity.classList.add("active");
+    renderEquityPanel();
+  }
+
+  function closeEquityPanel() {
+    playback.equityPanelOpen = false;
+    els.equityPanel.style.display = "none";
+    els.btnEquity.classList.remove("active");
+    if (window.EquityCalculator) {
+      try { window.EquityCalculator.cancel(); } catch (e) {}
+    }
+  }
+
+  // Refresh when hand changes
+  function onHandChangedForEquity() {
+    equityLastResult = null;
+    if (playback.equityPanelOpen) renderEquityPanel();
+  }
+
   // ---- Event Handlers ----
 
   function setupEvents() {
@@ -3452,6 +4031,13 @@
     els.btnBackToScript.addEventListener("click", backToScript);
     els.btnNextHand.addEventListener("click", () => loadHand(playback.currentHandIndex + 1));
     els.btnPrevHand.addEventListener("click", () => loadHand(playback.currentHandIndex - 1));
+
+    // Equity panel
+    els.btnEquity.addEventListener("click", () => {
+      if (playback.equityPanelOpen) closeEquityPanel();
+      else openEquityPanel();
+    });
+    els.equityCloseBtn.addEventListener("click", closeEquityPanel);
 
     // Action buttons (branch mode)
     els.btnFold.addEventListener("click", () => coachAction("fold", els.btnFold));

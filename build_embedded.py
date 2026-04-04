@@ -24,6 +24,9 @@ SHARED_FILES = [
     "session_storage.js",
     "llm_adapter.js",
     "parse_prompt.js",
+    "hand_evaluator.js",
+    "equity_engine.js",
+    "equity_calculator.js",
     "pokerstars_exporter.js",
 ]
 
