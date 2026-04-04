@@ -1272,6 +1272,7 @@
 <script src="shared/session_storage.js"></script>
 <script src="shared/llm_adapter.js"></script>
 <script src="shared/parse_prompt.js"></script>
+<script src="shared/pokerstars_exporter.js"></script>
 <!-- SHARED_ENGINE_END -->
 <script>
 /* ============================================================
@@ -3822,7 +3823,8 @@
           <span class="lib-fav ${favClass}" data-action="fav" title="Toggle favorite">\u2605</span>
           <span class="lib-name" data-action="load">${s.name || "Unnamed"}</span>
           <span class="lib-meta">${s.handCount || 0} hands &middot; ${sizeKB}</span>
-          <button class="lib-btn" data-action="export" title="Export">\u21e9</button>
+          <button class="lib-btn" data-action="export-json" title="Export JSON">JSON</button>
+          <button class="lib-btn" data-action="export-phh" title="Export PokerStars HH (for trackers)">HH</button>
           <button class="lib-btn delete" data-action="delete" title="Delete">\u2715</button>
         </div>`;
       });
@@ -3842,7 +3844,7 @@
         } else if (action === "fav") {
           SS.toggleFavorite(id);
           renderSessionLibrary();
-        } else if (action === "export") {
+        } else if (action === "export-json") {
           e.stopPropagation();
           const json = SS.exportSession(id);
           if (json) {
@@ -3850,9 +3852,26 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = (sessions.find(s => s.id === id) || {}).name + ".json" || "session.json";
+            const name = ((sessions.find(s => s.id === id) || {}).name || "session").replace(/[^a-z0-9]/gi, "_");
+            a.download = name + ".json";
             a.click();
             URL.revokeObjectURL(url);
+          }
+        } else if (action === "export-phh") {
+          e.stopPropagation();
+          const sessionData = SS.loadSession(id);
+          if (sessionData && typeof PokerStarsExporter !== "undefined") {
+            const phh = PokerStarsExporter.exportSession(sessionData);
+            if (phh) {
+              const blob = new Blob([phh], { type: "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              const name = ((sessions.find(s => s.id === id) || {}).name || "session").replace(/[^a-z0-9]/gi, "_");
+              a.download = name + "_handhistory.txt";
+              a.click();
+              URL.revokeObjectURL(url);
+            }
           }
         } else if (action === "delete") {
           e.stopPropagation();

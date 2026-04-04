@@ -24,6 +24,7 @@ SHARED_FILES = [
     "session_storage.js",
     "llm_adapter.js",
     "parse_prompt.js",
+    "pokerstars_exporter.js",
 ]
 
 # Card image directories to search (relative to script dir, or absolute)
