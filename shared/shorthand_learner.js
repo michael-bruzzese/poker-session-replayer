@@ -691,6 +691,15 @@ const ShorthandLearner = (() => {
     };
 
     chunks.forEach((chunk, idx) => {
+      // Skip chunks that don't look like hands (preamble, table lineup, etc.)
+      // A chunk is a hand if it has action keywords, shorthand actions, or card codes
+      const chunkLower = chunk.toLowerCase();
+      const hasAction = /\b(raises?|bets?|calls?|folds?|checks?|all[\s-]?in|opens?|limps?|3[\s-]?bets?|shoves?)\b/i.test(chunkLower)
+        || /\b[rcfx]\d*\b/.test(chunkLower)
+        || /\b(squeeze|snap|flat|jam)\b/i.test(chunkLower);
+      const hasCards = /[AKQJT2-9][shdc]/i.test(chunk);
+      if (!hasAction && !hasCards) return;
+
       const hand = parseHandChunk(chunk, profile, idx + 1, o, playerTracker);
       if (hand) hands.push(hand);
     });
@@ -758,11 +767,25 @@ const ShorthandLearner = (() => {
     const fullText = chunk;
     const fullLower = fullText.toLowerCase();
 
+    // ---- Extract button seat ----
+    const btnMatch = fullLower.match(/button\s+(?:is\s+)?(?:on\s+)?seat\s*(\d)/i)
+      || fullLower.match(/btn\s+(?:is\s+)?(?:on\s+)?seat\s*(\d)/i)
+      || fullLower.match(/button\s+seat\s*(\d)/i)
+      || fullLower.match(/seat\s*(\d)\s+(?:is\s+)?(?:the\s+)?button/i);
+    if (btnMatch) {
+      hand.button_seat = parseInt(btnMatch[1], 10);
+      hand.parse_confidence += 0.15;
+    }
+
     // ---- Extract hero position / button ----
     const heroPos = extractHeroPosition(fullLower, profile);
     if (heroPos) {
       hand._heroPosition = heroPos;
       hand.parse_confidence += 0.1;
+      // If hero position is BTN and we don't have a button seat yet, set it
+      if (!btnMatch && (heroPos === "BTN" || heroPos === "Button") && playerTracker.heroSeat) {
+        hand.button_seat = playerTracker.heroSeat;
+      }
     }
 
     // ---- Extract cards ----
@@ -785,6 +808,11 @@ const ShorthandLearner = (() => {
         hand.action_sequence.push({ street, actions });
         hand.parse_confidence += 0.05;
       }
+    }
+
+    // ---- Post-process: map positions to seats using button ----
+    if (hand.button_seat >= 1 && hand.button_seat <= 9) {
+      assignSeatsFromPositions(hand, 9);
     }
 
     if (!hand.action_sequence.length) {
@@ -1087,10 +1115,67 @@ const ShorthandLearner = (() => {
     return null;
   }
 
+  function assignSeatsFromPositions(hand, seatCount) {
+    // Use button seat + engine's position mapping to fill in null seats
+    const btnSeat = hand.button_seat;
+    if (!btnSeat || btnSeat < 1 || btnSeat > seatCount) return;
+
+    const PE = typeof PokerEngine !== "undefined" ? PokerEngine
+      : typeof window !== "undefined" ? window.PokerEngine : null;
+    if (!PE || !PE.computePositionsFromButton) return;
+
+    // computePositionsFromButton returns { seatIdx: positionName } (0-indexed seats)
+    const seatToPos = PE.computePositionsFromButton(btnSeat - 1, seatCount);
+    // Invert to get position → 1-indexed seat
+    const posToSeat = {};
+    for (const [seatIdx, pos] of Object.entries(seatToPos)) {
+      posToSeat[pos] = parseInt(seatIdx, 10) + 1; // convert to 1-indexed
+    }
+
+    // Also map common aliases
+    posToSeat["Button"] = btnSeat;
+    if (posToSeat["SB"]) posToSeat["Small Blind"] = posToSeat["SB"];
+    if (posToSeat["BB"]) posToSeat["Big Blind"] = posToSeat["BB"];
+
+    // Walk through all actions and fill in null seats from position
+    for (const streetBlock of (hand.action_sequence || [])) {
+      for (const action of (streetBlock.actions || [])) {
+        if (action.seat === null || action.seat === undefined || action.seat === 0) {
+          const pos = action.position;
+          if (pos && posToSeat[pos]) {
+            action.seat = posToSeat[pos];
+          }
+        }
+      }
+    }
+  }
+
   function findActorBefore(tokens, actionIdx, positions, heroAliases, villainAliases, tracker) {
     // Look backwards from the action word for an actor reference
-    for (let j = actionIdx - 1; j >= Math.max(0, actionIdx - 4); j--) {
+    for (let j = actionIdx - 1; j >= Math.max(0, actionIdx - 6); j--) {
       const word = tokens[j].toLowerCase();
+
+      // "Seat N" pattern — e.g. "Seat 9 raises", "Seat 8 Steve opens"
+      if (word === "seat" && j + 1 < tokens.length) {
+        const nextWord = tokens[j + 1];
+        const seatNum = parseInt(nextWord, 10);
+        if (seatNum >= 1 && seatNum <= 9) {
+          // Check if there's a name or position after the seat number
+          if (j + 2 < tokens.length) {
+            const wordAfter = tokens[j + 2];
+            const wordAfterLower = wordAfter.toLowerCase();
+            // If it's a name (not a position, not an action keyword), learn it
+            if (!positions[wordAfterLower] &&
+                !/^(raises?|bets?|calls?|folds?|checks?|opens?|limps?|goes|is|the|in|on)$/i.test(wordAfterLower)) {
+              tracker.knownPlayers[wordAfterLower] = seatNum;
+            }
+          }
+          if (seatNum === tracker.heroSeat) {
+            return { seat: seatNum, position: "Hero" };
+          }
+          return { seat: seatNum, position: `S${seatNum}` };
+        }
+      }
 
       // Hero?
       if (heroAliases.has(word)) {
