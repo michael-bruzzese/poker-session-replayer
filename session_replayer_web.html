@@ -1196,7 +1196,7 @@
   <div id="uploadZone" class="upload-zone">
     <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
-    <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md">
+    <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md,.m4a,.mp3,.wav,.webm,.ogg,audio/*">
   </div>
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="pasteTextBtn" class="demo-btn">Paste Session Notes</button>
@@ -4095,6 +4095,13 @@
   function handleFile(file) {
     const ext = file.name.split(".").pop().toLowerCase();
 
+    // Audio files — route to Whisper transcription
+    const LA = window.LLMAdapter;
+    if (LA && typeof LA.isAudioFile === "function" && LA.isAudioFile(file)) {
+      handleAudioFile(file);
+      return;
+    }
+
     // .docx files are ZIP archives — extract the text from the XML
     if (ext === "docx") {
       handleDocxFile(file);
@@ -4114,6 +4121,57 @@
     };
 
     reader.readAsText(file);
+  }
+
+  async function handleAudioFile(file) {
+    const LA = window.LLMAdapter;
+    showScreen("parse");
+    els.parseTextArea.value = "";
+
+    // Size guard — Whisper supports up to 25MB
+    if (file.size > 25 * 1024 * 1024) {
+      els.parseStatus.textContent = "Audio file too large. Whisper supports up to 25MB.";
+      return;
+    }
+
+    // OpenAI key required for Whisper
+    const openaiKey = LA && typeof LA.getKeyForProvider === "function"
+      ? LA.getKeyForProvider("openai")
+      : null;
+    if (!openaiKey || !openaiKey.apiKey) {
+      els.parseStatus.textContent = "Audio transcription requires an OpenAI API key. Add one in the AI Parsing panel above. Audio uses OpenAI Whisper.";
+      return;
+    }
+
+    // Estimate duration
+    let estimateText = "";
+    if (typeof LA.estimateTranscriptionTime === "function") {
+      const secs = LA.estimateTranscriptionTime(file.size);
+      if (secs && isFinite(secs)) {
+        estimateText = ` (~${Math.round(secs)} seconds estimated)`;
+      }
+    }
+    if (!estimateText) {
+      estimateText = " (~15 seconds for a 5-minute recording)";
+    }
+
+    els.parseStatus.textContent = `Transcribing audio...${estimateText}`;
+
+    try {
+      const result = await LA.transcribeAudio({ apiKey: openaiKey.apiKey, audioBlob: file });
+      if (result && result.success && result.text) {
+        els.parseTextArea.value = result.text;
+        els.parseStatus.textContent = "Transcription complete. Parsing session...";
+        await processTextInput(result.text, file.name);
+      } else {
+        const errMsg = (result && result.error) ? result.error : "Unknown error";
+        els.parseStatus.textContent = `Transcription failed: ${errMsg}`;
+        els.parseTextArea.value = "";
+      }
+    } catch (err) {
+      els.parseStatus.textContent = `Transcription failed: ${err.message || err}`;
+      els.parseTextArea.value = "";
+    }
   }
 
   function handleDocxFile(file) {
