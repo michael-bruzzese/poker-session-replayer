@@ -830,6 +830,47 @@
     transition: border-color 0.2s;
   }
   .upload-zone:hover { border-color: var(--btn-primary); }
+
+  /* AI Parsing panel */
+  .ai-panel {
+    width: 500px;
+    max-width: 90%;
+    padding: 14px 16px;
+    background: #1e1e2e;
+    border: 1px solid #3a3a4e;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .ai-panel .ai-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .ai-panel .ai-title { font-weight:600; color:#eee; font-size:13px; }
+  .ai-panel .ai-badge {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;
+  }
+  .ai-panel .ai-badge.on {
+    background:rgba(46,160,67,0.15); color:#3fb950; border:1px solid rgba(46,160,67,0.3);
+  }
+  .ai-panel .ai-badge.off {
+    background:rgba(120,120,120,0.15); color:#aaa; border:1px solid #444;
+  }
+  .ai-panel .ai-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .ai-panel .ai-link {
+    font-size:11px; color:var(--btn-primary); cursor:pointer; background:none; border:none; padding:0; text-decoration:underline;
+  }
+  .ai-panel .ai-setup { display:flex; gap:8px; margin-top:10px; }
+  .ai-panel .ai-setup input {
+    flex:1; padding:8px 10px; background:#14141e; border:1px solid #444; color:#eee; border-radius:6px; font-size:12px; font-family:monospace;
+  }
+  .ai-panel .ai-setup input:focus { outline:none; border-color:var(--btn-primary); }
+  .ai-panel .ai-setup button {
+    padding:8px 14px; background:var(--btn-primary); color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;
+  }
+  .ai-panel .ai-setup button:disabled { opacity:0.5; cursor:not-allowed; }
+  .ai-panel .ai-help { margin-top:8px; color:var(--text-muted); font-size:11px; line-height:1.4; }
+  .ai-panel .ai-feedback { margin-top:8px; font-size:12px; min-height:16px; }
+  .ai-panel .ai-feedback.ok { color:#3fb950; }
+  .ai-panel .ai-feedback.err { color:#f85149; }
+  .ai-panel .ai-feedback.info { color:var(--text-secondary); }
   .upload-zone.dragover { border-color: var(--btn-primary); background: rgba(42,127,255,0.05); }
   .upload-zone input[type="file"] { display: none; }
 
@@ -953,6 +994,18 @@
 <div id="uploadScreen" class="screen upload-screen active">
   <h1>Session Replayer</h1>
   <p>Upload a session file or paste session notes to get started.</p>
+  <div id="aiPanel" class="ai-panel">
+    <div class="ai-header">
+      <div class="ai-title">AI Parsing</div>
+      <div id="aiPanelStatus"></div>
+    </div>
+    <div id="aiPanelSetup" class="ai-setup" style="display:none;">
+      <input type="password" id="aiKeyInput" placeholder="Paste your Anthropic or OpenAI API key (starts with sk-ant- or sk-)" autocomplete="off" spellcheck="false">
+      <button id="aiKeySaveBtn" type="button">Save Key</button>
+    </div>
+    <p id="aiPanelHelp" class="ai-help" style="display:none;">AI parsing makes session notes parse much more accurately. Get a key from console.anthropic.com or platform.openai.com</p>
+    <div id="aiPanelFeedback" class="ai-feedback"></div>
+  </div>
   <div id="uploadZone" class="upload-zone">
     <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
@@ -4842,6 +4895,607 @@ if (typeof module !== "undefined" && module.exports) {
   window.SessionStorage = SessionStorage;
 }
 
+
+// ---- llm_adapter.js ----
+// LLM Adapter — provider-agnostic interface for LLM API calls
+// Supports: Anthropic, OpenAI, OpenAI-compatible endpoints
+
+const LLMAdapter = (() => {
+  "use strict";
+
+  // Default models per provider (picked for parsing quality + cost balance)
+  const DEFAULT_MODELS = {
+    anthropic: "claude-sonnet-4-5-20250514",
+    openai: "gpt-4o"
+  };
+
+  // Approximate per-token costs (USD, input tokens). Update as providers change pricing.
+  // These are used ONLY for honest cost estimates — do not hide costs.
+  const COST_PER_1K_INPUT_TOKENS = {
+    anthropic: { "claude-sonnet-4-5-20250514": 0.003, default: 0.003 },
+    openai: { "gpt-4o": 0.0025, default: 0.0025 }
+  };
+  const COST_PER_1K_OUTPUT_TOKENS = {
+    anthropic: { "claude-sonnet-4-5-20250514": 0.015, default: 0.015 },
+    openai: { "gpt-4o": 0.01, default: 0.01 }
+  };
+
+  // ---- Provider Detection ----
+
+  function detectProvider(apiKey) {
+    if (!apiKey || typeof apiKey !== "string") return "unknown";
+    const key = apiKey.trim();
+    if (key.startsWith("sk-ant-")) return "anthropic";
+    if (key.startsWith("sk-")) return "openai";
+    return "unknown";
+  }
+
+  // ---- Cost Estimation ----
+
+  function estimateTokens(chars) {
+    // Rough estimate: 1 token ≈ 4 characters for English
+    return Math.ceil(chars / 4);
+  }
+
+  function estimateCost({ provider, inputChars, maxOutputTokens, model }) {
+    const usedModel = model || DEFAULT_MODELS[provider] || "default";
+    const inputRates = COST_PER_1K_INPUT_TOKENS[provider] || { default: 0.003 };
+    const outputRates = COST_PER_1K_OUTPUT_TOKENS[provider] || { default: 0.015 };
+
+    const inputRate = inputRates[usedModel] || inputRates.default;
+    const outputRate = outputRates[usedModel] || outputRates.default;
+
+    const inputTokens = estimateTokens(inputChars);
+    const outputTokens = maxOutputTokens || 4096;
+
+    const cost = (inputTokens / 1000) * inputRate + (outputTokens / 1000) * outputRate;
+
+    return {
+      estimatedInputTokens: inputTokens,
+      estimatedOutputTokens: outputTokens,
+      estimatedCost: Math.round(cost * 10000) / 10000, // 4 decimal places
+      inputRatePerK: inputRate,
+      outputRatePerK: outputRate
+    };
+  }
+
+  // ---- Error Mapping ----
+
+  function mapError(status, bodyText, isCors) {
+    if (isCors) {
+      return "This provider is blocking browser requests. Try a different provider or paste your notes manually.";
+    }
+    if (status === 401) return "Invalid API key. Check that you copied the full key.";
+    if (status === 403) return "API key doesn't have permission for this model.";
+    if (status === 429) return "Rate limited. Wait a moment and try again.";
+    if (status === 413) return "Request too large. Try shortening your notes.";
+    if (status === 400) {
+      if (bodyText && bodyText.toLowerCase().includes("model")) {
+        return "Model not available. Try a different model.";
+      }
+      return "Request rejected. Check the format of your notes.";
+    }
+    if (status >= 500) return "Provider service error. Try again in a moment.";
+    return `API error (status ${status})`;
+  }
+
+  // ---- Request Builders ----
+
+  function buildAnthropicRequest({ apiKey, model, systemPrompt, userMessage, maxTokens }) {
+    return {
+      url: "https://api.anthropic.com/v1/messages",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_MODELS.anthropic,
+        max_tokens: maxTokens || 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }]
+      })
+    };
+  }
+
+  function buildOpenAIRequest({ apiKey, model, systemPrompt, userMessage, maxTokens, endpoint }) {
+    return {
+      url: endpoint || "https://api.openai.com/v1/chat/completions",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_MODELS.openai,
+        max_tokens: maxTokens || 4096,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ]
+      })
+    };
+  }
+
+  // ---- Response Parsing ----
+
+  function parseAnthropicResponse(data) {
+    if (data.content && Array.isArray(data.content) && data.content[0]) {
+      return {
+        text: data.content[0].text,
+        tokensUsed: (data.usage && (data.usage.input_tokens + data.usage.output_tokens)) || 0
+      };
+    }
+    return { text: "", tokensUsed: 0 };
+  }
+
+  function parseOpenAIResponse(data) {
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      return {
+        text: data.choices[0].message.content,
+        tokensUsed: (data.usage && data.usage.total_tokens) || 0
+      };
+    }
+    return { text: "", tokensUsed: 0 };
+  }
+
+  // ---- Main Call ----
+
+  async function callLLM({ provider, apiKey, model, endpoint, systemPrompt, userMessage, maxTokens }) {
+    if (!apiKey) return { success: false, error: "API key is required" };
+    if (!systemPrompt || !userMessage) return { success: false, error: "System prompt and user message required" };
+
+    const effectiveProvider = provider || detectProvider(apiKey);
+    if (effectiveProvider === "unknown") {
+      return { success: false, error: "Could not detect provider from API key. Please specify." };
+    }
+
+    let request;
+    try {
+      if (effectiveProvider === "anthropic") {
+        request = buildAnthropicRequest({ apiKey, model, systemPrompt, userMessage, maxTokens });
+      } else if (effectiveProvider === "openai" || effectiveProvider === "openai-compatible") {
+        request = buildOpenAIRequest({ apiKey, model, systemPrompt, userMessage, maxTokens, endpoint });
+      } else {
+        return { success: false, error: `Unsupported provider: ${effectiveProvider}` };
+      }
+    } catch (e) {
+      return { success: false, error: "Failed to build request: " + e.message };
+    }
+
+    let response;
+    try {
+      response = await fetch(request.url, {
+        method: "POST",
+        headers: request.headers,
+        body: request.body
+      });
+    } catch (e) {
+      const msg = e.message || "";
+      const isCors = msg.includes("CORS") || msg.includes("cors") || msg.includes("Failed to fetch");
+      return { success: false, error: mapError(0, msg, isCors) };
+    }
+
+    if (!response.ok) {
+      let bodyText = "";
+      try { bodyText = await response.text(); } catch (_) {}
+      return { success: false, error: mapError(response.status, bodyText, false), status: response.status };
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      return { success: false, error: "Failed to parse API response" };
+    }
+
+    const parsed = (effectiveProvider === "anthropic")
+      ? parseAnthropicResponse(data)
+      : parseOpenAIResponse(data);
+
+    return {
+      success: true,
+      text: parsed.text,
+      tokensUsed: parsed.tokensUsed,
+      provider: effectiveProvider
+    };
+  }
+
+  // ---- Key Validation ----
+
+  async function validateKey({ provider, apiKey, endpoint }) {
+    // Make a minimal API call to verify the key works
+    const result = await callLLM({
+      provider,
+      apiKey,
+      endpoint,
+      systemPrompt: "Respond with just the word: OK",
+      userMessage: "test",
+      maxTokens: 10
+    });
+
+    if (result.success) {
+      return { valid: true, provider: result.provider };
+    }
+    return { valid: false, error: result.error };
+  }
+
+  // ---- Key Storage ----
+  // Multiple keys supported — one per provider
+
+  const STORAGE_KEY = "llm_keys";
+
+  function getSavedKeys() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      return JSON.parse(raw) || {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveKey(provider, apiKey, options) {
+    const keys = getSavedKeys();
+    keys[provider] = {
+      apiKey,
+      model: (options && options.model) || DEFAULT_MODELS[provider],
+      endpoint: (options && options.endpoint) || null,
+      savedAt: Date.now()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+    return { success: true };
+  }
+
+  function removeKey(provider) {
+    const keys = getSavedKeys();
+    delete keys[provider];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+    return { success: true };
+  }
+
+  function getKeyForProvider(provider) {
+    const keys = getSavedKeys();
+    return keys[provider] || null;
+  }
+
+  function hasAnyKey() {
+    const keys = getSavedKeys();
+    return Object.keys(keys).length > 0;
+  }
+
+  function getPrimaryKey() {
+    // Return first available key, preferring Anthropic then OpenAI
+    const keys = getSavedKeys();
+    if (keys.anthropic) return { provider: "anthropic", ...keys.anthropic };
+    if (keys.openai) return { provider: "openai", ...keys.openai };
+    const providers = Object.keys(keys);
+    if (providers.length > 0) return { provider: providers[0], ...keys[providers[0]] };
+    return null;
+  }
+
+  // ---- Public API ----
+
+  return {
+    // Detection
+    detectProvider,
+    DEFAULT_MODELS,
+
+    // Cost estimation
+    estimateTokens,
+    estimateCost,
+
+    // Core call
+    callLLM,
+    validateKey,
+
+    // Key storage
+    getSavedKeys,
+    saveKey,
+    removeKey,
+    getKeyForProvider,
+    hasAnyKey,
+    getPrimaryKey,
+
+    // Error mapping (for testing)
+    mapError
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = LLMAdapter;
+} else if (typeof window !== "undefined") {
+  window.LLMAdapter = LLMAdapter;
+}
+
+
+// ---- parse_prompt.js ----
+// Parse Prompt — system prompt for LLM session parsing
+// This is the single source of truth for browser-side parsing.
+// Keep in sync with parse_session.py if the schema changes.
+
+const ParsePrompt = (() => {
+  "use strict";
+
+  const SYSTEM_PROMPT = `You are a poker hand history parser. You convert natural language descriptions of poker sessions into structured JSON.
+
+## Your Task
+
+Parse the user's poker session notes (likely voice-transcribed from a live session) into a structured JSON format. The notes may be messy, abbreviated, contain typos, or use informal poker language.
+
+## Output Format
+
+Return ONLY valid JSON matching this schema (no markdown code fences, no explanation, just the JSON object):
+
+\`\`\`
+{
+  "version": 2,
+  "app": "session-replayer",
+  "session_name": "<descriptive name>",
+  "blinds": { "small": <number>, "big": <number> },
+  "players": {
+    "<seat_number_1_based>": { "name": "<name>", "description": "<brief description>", "is_hero": true/false }
+  },
+  "hands": [
+    {
+      "hand_id": <sequential_number>,
+      "hand_label": "Hand <N>",
+      "status": "confirmed" or "needs_review",
+      "hero_seat": <1-9>,
+      "button_seat": <1-9>,
+      "blinds": { "small": <number>, "big": <number> },
+      "stacks": { "<seat_1_based>": <chips>, ... },
+      "hero_cards": ["<card>", "<card>"],
+      "known_villain_cards": { "<seat_1_based>": ["<card>", "<card>"] },
+      "board": {
+        "flop": ["<card>", "<card>", "<card>"],
+        "turn": "<card>",
+        "river": "<card>"
+      },
+      "action_sequence": [
+        {
+          "street": "preflop" | "flop" | "turn" | "river",
+          "actions": [
+            { "seat": <1-9>, "position": "<POS>", "action": "fold"|"call"|"raise"|"bet"|"check"|"all-in", "amount": <number_or_omit> }
+          ]
+        }
+      ],
+      "result": {
+        "winner_seat": <1-9>,
+        "pot": <number>,
+        "showdown": true/false,
+        "notes": "<brief result description>"
+      },
+      "warnings": ["<any issues or ambiguities>"],
+      "coach_flags": { "starred": false, "tag": "" },
+      "parse_confidence": <0.0 to 1.0>
+    }
+  ]
+}
+\`\`\`
+
+## Critical: Seat Numbering
+
+**Seats are ALWAYS 1-9. NEVER use seat 0.** Every action must have a seat number between 1 and 9. If you cannot determine which seat a player is in, do your best to infer from context (button position + stated position). If truly unknown, omit the seat field and add a warning.
+
+**How to map positions to seats:**
+1. Identify the button seat from the text (explicit "button on seat 3" or inferred from hero's position)
+2. Standard 9-max position order from button: BTN, SB, BB, UTG, UTG+1, UTG+2, LJ, HJ, CO
+3. If button is seat N, SB is seat N+1 (wrapping 1-9), BB is seat N+2, etc.
+4. Every action in the hand must have a seat number derived this way
+
+## Card Format
+Use 2-character codes: rank + suit. Ranks: A K Q J T 9 8 7 6 5 4 3 2. Suits: h s d c (hearts, spades, diamonds, clubs).
+Examples: "Ah" = Ace of hearts, "Ts" = Ten of spades, "2c" = Two of clubs.
+
+## Position Labels (9-handed)
+In order from button: BTN, SB, BB, UTG, UTG+1, UTG+2, LJ, HJ, CO
+
+## Action Amounts
+All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the additional amount).
+- "raises to 15" → amount: 15
+- "bets 30" → amount: 30
+- "calls" → amount equals the current bet to call
+- For calls, set the amount to match whatever the bet/raise was
+
+## Parsing Rules
+
+1. **Hand boundaries**: Look for phrases like "hand 1", "next hand", "new hand", "hand number", or any clear transition. Also look for dealing of new hole cards as implicit hand boundaries.
+
+2. **Positions**: Map descriptions to seats. "I'm on the button" = hero is BTN. "Under the gun" = UTG. "Cutoff" = CO. "Hijack" = HJ. "Lojack" = LJ.
+
+3. **Player references**: "the guy on my left", "the nit", "the loose player", "Steve", "Dave" — map these to consistent seat numbers based on context clues. Use the same seat for the same player across hands. If a player is introduced as "Seat 8 Steve", remember that Steve is seat 8 for the entire session.
+
+4. **Pronouns**: "he", "she", "they" refer to the player being discussed. In heads-up pots, the pronoun refers to the villain (non-hero player still in the hand). Track this context across consecutive actions.
+
+5. **Typos and informal language**:
+   - "ace king" or "AK" or "big slick" = Ace-King
+   - "pocket tens" or "TT" or "pair of tens" = TT
+   - "three bet" or "3bet" or "re-raise" = raise
+   - "c-bet" or "continuation bet" = bet
+   - "check raise" = check, then raise (two separate actions)
+   - "limp" = call (preflop, calling the big blind)
+   - "open" or "open raise" = raise (first voluntary action preflop)
+
+6. **Missing data**:
+   - If suits aren't mentioned, assign reasonable suits (avoid duplicates)
+   - If board cards are partially described ("flop came king high with two hearts"), do your best and add a warning
+   - If stack sizes aren't mentioned, use default of 100 big blinds per player
+   - If the button position isn't explicit, infer from described positions
+
+7. **Preflop folds**: Include all fold actions explicitly. If "folds around to the button", that means all seats between UTG and the button fold. Include each as a separate fold action with the correct seat number.
+
+8. **Result**: Determine the winner based on the action (last player standing after folds, or showdown winner if described).
+
+9. **Confidence**: Set parse_confidence based on how clear the input was:
+   - 0.9-1.0: Clear, unambiguous, all data present
+   - 0.7-0.9: Most data present, some inference needed
+   - 0.5-0.7: Significant inference, missing key data
+   - Below 0.5: Very unclear, mark status as "needs_review"
+
+10. **Warnings**: Add a warning string for any ambiguity, missing data, or inference you had to make.
+
+11. **Player descriptions**: If the user describes players ("the tight guy in seat 3", "Dave is a LAG"), capture these in the players object.
+
+## Important
+
+- Return ONLY the JSON object. No markdown code fences, no explanation text.
+- Every hand must have at least hero_cards and one street of action.
+- Hands where hero just folds preflop are valid — include them.
+- Maintain consistent seat assignments across the entire session.
+- If blinds change during the session, update per-hand blinds.
+- Every action MUST have a seat number between 1 and 9. Never use 0.`;
+
+  // ---- Context Message Builder ----
+
+  function buildUserMessage({ text, blinds, heroSeat, sessionName, knownPlayers, chunkIndex }) {
+    const parts = [];
+    if (chunkIndex && chunkIndex > 0) {
+      parts.push(`[Continuing from previous chunk. Maintain consistent seat numbering.]`);
+      if (knownPlayers && Object.keys(knownPlayers).length > 0) {
+        parts.push(`[Known players from earlier: ${JSON.stringify(knownPlayers)}]`);
+      }
+    }
+    if (sessionName) parts.push(`[Session name: ${sessionName}]`);
+    if (blinds) parts.push(`[Session blinds: $${blinds.small}/$${blinds.big}]`);
+    if (heroSeat) parts.push(`[Hero is in seat ${heroSeat}]`);
+
+    const context = parts.length > 0 ? parts.join("\n") + "\n\n" : "";
+    return context + text;
+  }
+
+  // ---- Chunking ----
+
+  const MAX_CHARS_PER_CHUNK = 30000;
+
+  function chunkText(text, maxChars) {
+    maxChars = maxChars || MAX_CHARS_PER_CHUNK;
+    if (!text || text.length <= maxChars) return [text || ""];
+
+    // Find hand boundaries
+    const handPattern = /(?=\bhand\s*#?\s*\d+\b)/gi;
+    const matches = [...text.matchAll(handPattern)];
+
+    // If no hand boundaries found, fall back to double-newline
+    if (matches.length <= 1) {
+      const nlChunks = text.split(/\n\s*\n/).filter(c => c.trim().length > 0);
+      return mergeSmallChunks(nlChunks, maxChars);
+    }
+
+    // Split at hand boundaries
+    const splitPoints = [0, ...matches.map(m => m.index).filter(i => i > 0)];
+    const chunks = [];
+    for (let i = 0; i < splitPoints.length; i++) {
+      const start = splitPoints[i];
+      const end = i + 1 < splitPoints.length ? splitPoints[i + 1] : text.length;
+      chunks.push(text.slice(start, end));
+    }
+
+    return mergeSmallChunks(chunks, maxChars);
+  }
+
+  function mergeSmallChunks(chunks, maxChars) {
+    // Combine adjacent chunks up to maxChars to minimize API calls
+    const merged = [];
+    let current = "";
+    for (const chunk of chunks) {
+      if (!chunk.trim()) continue;
+      if (current.length + chunk.length <= maxChars) {
+        current += chunk;
+      } else {
+        if (current) merged.push(current);
+        current = chunk.length <= maxChars ? chunk : chunk.slice(0, maxChars);
+      }
+    }
+    if (current) merged.push(current);
+    return merged.length > 0 ? merged : [""];
+  }
+
+  // ---- JSON Response Extraction ----
+
+  function extractJSON(responseText) {
+    if (!responseText) return null;
+    // Try direct parse first
+    try {
+      return JSON.parse(responseText);
+    } catch (_) {}
+
+    // Try extracting from markdown code fences (```json ... ```)
+    const fenceMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if (fenceMatch) {
+      try {
+        return JSON.parse(fenceMatch[1]);
+      } catch (_) {}
+    }
+
+    // Try finding the first { and last } and parsing
+    const firstBrace = responseText.indexOf("{");
+    const lastBrace = responseText.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(responseText.slice(firstBrace, lastBrace + 1));
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  // ---- Response Merging (for chunked parses) ----
+
+  function mergeParsedResults(results) {
+    if (!results || results.length === 0) return null;
+    if (results.length === 1) return results[0];
+
+    const merged = { ...results[0] };
+    merged.hands = [];
+    merged.players = { ...results[0].players };
+
+    let handIdCounter = 1;
+    for (const result of results) {
+      if (!result || !result.hands) continue;
+      for (const hand of result.hands) {
+        hand.hand_id = handIdCounter++;
+        hand.hand_label = `Hand ${hand.hand_id}`;
+        merged.hands.push(hand);
+      }
+      // Merge players
+      if (result.players) {
+        for (const [seat, player] of Object.entries(result.players)) {
+          if (!merged.players[seat]) merged.players[seat] = player;
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  // ---- Validation ----
+
+  function isValidSessionShape(data) {
+    if (!data || typeof data !== "object") return false;
+    if (!Array.isArray(data.hands)) return false;
+    return true;
+  }
+
+  // ---- Public API ----
+
+  return {
+    SYSTEM_PROMPT,
+    MAX_CHARS_PER_CHUNK,
+    buildUserMessage,
+    chunkText,
+    extractJSON,
+    mergeParsedResults,
+    isValidSessionShape
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = ParsePrompt;
+} else if (typeof window !== "undefined") {
+  window.ParsePrompt = ParsePrompt;
+}
+
 </script>
 <script>
 /* ============================================================
@@ -4908,6 +5562,13 @@ if (typeof module !== "undefined" && module.exports) {
     qaScreen: document.getElementById("qaScreen"),
     uploadZone: document.getElementById("uploadZone"),
     fileInput: document.getElementById("fileInput"),
+    aiPanel: document.getElementById("aiPanel"),
+    aiPanelStatus: document.getElementById("aiPanelStatus"),
+    aiPanelSetup: document.getElementById("aiPanelSetup"),
+    aiKeyInput: document.getElementById("aiKeyInput"),
+    aiKeySaveBtn: document.getElementById("aiKeySaveBtn"),
+    aiPanelHelp: document.getElementById("aiPanelHelp"),
+    aiPanelFeedback: document.getElementById("aiPanelFeedback"),
     pasteTextBtn: document.getElementById("pasteTextBtn"),
     parseTextArea: document.getElementById("parseTextArea"),
     parseBlinds: document.getElementById("parseBlinds"),
@@ -6996,6 +7657,9 @@ if (typeof module !== "undefined" && module.exports) {
       if (els.fileInput.files.length) handleFile(els.fileInput.files[0]);
     });
 
+    // AI Parsing panel
+    wireAIPanel();
+
     // Top bar
     els.toggleSidebarBtn.addEventListener("click", () => {
       els.sidebar.classList.toggle("collapsed");
@@ -7136,16 +7800,98 @@ if (typeof module !== "undefined" && module.exports) {
     reader.readAsArrayBuffer(file);
   }
 
-  function processTextInput(text, fileName) {
-    // Try JSON first (regardless of extension)
-    try {
-      const data = JSON.parse(text);
-      if (data && (data.hands || data.action_sequence || data.version)) {
-        startQA(data);
-        return;
-      }
-    } catch (_) { /* not JSON, continue */ }
+  // ---- AI Parsing Panel ----
 
+  function renderAIPanel() {
+    const LA = window.LLMAdapter;
+    if (!LA || !els.aiPanel) return;
+
+    const keyInfo = LA.getPrimaryKey();
+    if (keyInfo) {
+      const providerLabel = keyInfo.provider === "anthropic"
+        ? "Anthropic"
+        : keyInfo.provider === "openai" ? "OpenAI" : keyInfo.provider;
+      els.aiPanelStatus.innerHTML =
+        `<span class="ai-badge on"><span class="ai-dot"></span>AI Parsing: On (${providerLabel})</span> ` +
+        `<button type="button" class="ai-link" id="aiChangeKeyBtn">change key</button>`;
+      els.aiPanelSetup.style.display = "none";
+      els.aiPanelHelp.style.display = "none";
+      els.aiPanelFeedback.textContent = "";
+      els.aiPanelFeedback.className = "ai-feedback";
+      const changeBtn = document.getElementById("aiChangeKeyBtn");
+      if (changeBtn) {
+        changeBtn.addEventListener("click", () => {
+          // Remove the current primary key and show setup
+          LA.removeKey(keyInfo.provider);
+          renderAIPanel();
+        });
+      }
+    } else {
+      els.aiPanelStatus.innerHTML =
+        `<span class="ai-badge off"><span class="ai-dot"></span>AI Parsing: Off</span>`;
+      els.aiPanelSetup.style.display = "flex";
+      els.aiPanelHelp.style.display = "block";
+    }
+  }
+
+  async function saveAIKey() {
+    const LA = window.LLMAdapter;
+    if (!LA) return;
+    const raw = (els.aiKeyInput.value || "").trim();
+    if (!raw) {
+      els.aiPanelFeedback.textContent = "Please paste a key first.";
+      els.aiPanelFeedback.className = "ai-feedback err";
+      return;
+    }
+    const provider = LA.detectProvider(raw);
+    if (provider === "unknown") {
+      els.aiPanelFeedback.textContent = "Unrecognized key format. Must start with sk-ant- or sk-.";
+      els.aiPanelFeedback.className = "ai-feedback err";
+      return;
+    }
+    els.aiPanelFeedback.textContent = "Validating...";
+    els.aiPanelFeedback.className = "ai-feedback info";
+    els.aiKeySaveBtn.disabled = true;
+    try {
+      const result = await LA.validateKey({ provider, apiKey: raw });
+      if (result.valid) {
+        LA.saveKey(provider, raw);
+        els.aiPanelFeedback.textContent = "\u2713 Key saved";
+        els.aiPanelFeedback.className = "ai-feedback ok";
+        els.aiKeyInput.value = "";
+        setTimeout(() => renderAIPanel(), 600);
+      } else {
+        els.aiPanelFeedback.textContent = "\u2717 Invalid key" + (result.error ? `: ${result.error}` : "");
+        els.aiPanelFeedback.className = "ai-feedback err";
+      }
+    } catch (err) {
+      els.aiPanelFeedback.textContent = "\u2717 Validation failed: " + (err.message || err);
+      els.aiPanelFeedback.className = "ai-feedback err";
+    } finally {
+      els.aiKeySaveBtn.disabled = false;
+    }
+  }
+
+  function wireAIPanel() {
+    if (!els.aiPanel) return;
+    if (!window.LLMAdapter) {
+      els.aiPanel.style.display = "none";
+      return;
+    }
+    els.aiKeySaveBtn.addEventListener("click", saveAIKey);
+    els.aiKeyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); saveAIKey(); }
+    });
+    els.aiKeyInput.addEventListener("paste", () => {
+      // After paste, auto-trigger validation shortly
+      setTimeout(() => {
+        if ((els.aiKeyInput.value || "").trim()) saveAIKey();
+      }, 50);
+    });
+    renderAIPanel();
+  }
+
+  function fallbackShorthand(text, fileName) {
     // Parse as shorthand text using ShorthandLearner
     try {
       const SL = window.ShorthandLearner;
@@ -7157,14 +7903,121 @@ if (typeof module !== "undefined" && module.exports) {
         });
         if (result && result.hands && result.hands.length > 0) {
           startQA(result);
-          return;
+          return true;
         }
       }
     } catch (err) {
       console.warn("ShorthandLearner error:", err);
     }
+    return false;
+  }
 
-    // Fallback: show in parse screen for manual review
+  async function parseWithAI(text, fileName) {
+    const LA = window.LLMAdapter;
+    const PP = window.ParsePrompt;
+    if (!LA || !PP) return false;
+
+    const keyInfo = LA.getPrimaryKey();
+    if (!keyInfo) return false;
+
+    const blinds = session.blinds || { small: 2, big: 5 };
+    const heroSeat = 1;
+    const sessionName = (fileName || "session").replace(/\.[^.]+$/, "");
+
+    // Cost estimate
+    try {
+      const est = LA.estimateCost({ provider: keyInfo.provider, inputChars: text.length });
+      console.log(`[AI Parse] Estimated cost: ~$${est.estimatedCost} (~${est.estimatedInputTokens} input tokens)`);
+    } catch (_) {}
+
+    const chunks = PP.chunkText(text);
+    const results = [];
+    const knownPlayers = {};
+
+    els.parseStatus.textContent = chunks.length > 1
+      ? `Parsing with AI (chunk 1 of ${chunks.length})...`
+      : "Parsing with AI...";
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks.length > 1) {
+        els.parseStatus.textContent = `Parsing chunk ${i + 1} of ${chunks.length}...`;
+      }
+      const userMessage = PP.buildUserMessage({
+        text: chunks[i],
+        blinds,
+        heroSeat,
+        sessionName,
+        knownPlayers,
+        chunkIndex: i
+      });
+      let res;
+      try {
+        res = await LA.callLLM({
+          provider: keyInfo.provider,
+          apiKey: keyInfo.apiKey,
+          model: keyInfo.model,
+          endpoint: keyInfo.endpoint,
+          systemPrompt: PP.SYSTEM_PROMPT,
+          userMessage
+        });
+      } catch (err) {
+        console.warn("[AI Parse] callLLM threw:", err);
+        return false;
+      }
+      if (!res || !res.success) {
+        console.warn("[AI Parse] call failed:", res && res.error);
+        return false;
+      }
+      const parsed = PP.extractJSON(res.text);
+      if (!parsed) {
+        console.warn("[AI Parse] could not extract JSON from response");
+        return false;
+      }
+      results.push(parsed);
+      // Accumulate known players for next chunk
+      if (parsed.players) {
+        for (const [seat, p] of Object.entries(parsed.players)) {
+          if (!knownPlayers[seat]) knownPlayers[seat] = p;
+        }
+      }
+    }
+
+    const merged = PP.mergeParsedResults(results);
+    if (!PP.isValidSessionShape(merged)) {
+      console.warn("[AI Parse] merged result not valid session shape");
+      return false;
+    }
+    const handCount = (merged.hands || []).length;
+    els.parseStatus.textContent = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    startQA(merged);
+    return true;
+  }
+
+  async function processTextInput(text, fileName) {
+    // Try JSON first (regardless of extension) — bypass AI for direct JSON
+    try {
+      const trimmed = text.trim();
+      if (trimmed.startsWith("{")) {
+        const data = JSON.parse(text);
+        if (data && (data.hands || data.action_sequence || data.version)) {
+          startQA(data);
+          return;
+        }
+      }
+    } catch (_) { /* not JSON, continue */ }
+
+    // AI parse if a key is configured
+    const LA = window.LLMAdapter;
+    if (LA && LA.hasAnyKey()) {
+      const ok = await parseWithAI(text, fileName);
+      if (ok) return;
+      els.parseStatus.textContent = "AI parse failed, using fallback parser...";
+    }
+
+    // Fallback: ShorthandLearner
+    if (fallbackShorthand(text, fileName)) return;
+
+    // Final fallback: show in parse screen for manual review
     els.parseTextArea.value = text;
     els.parseStatus.textContent = `Loaded ${fileName || "file"} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
     showScreen("parse");

@@ -830,6 +830,47 @@
     transition: border-color 0.2s;
   }
   .upload-zone:hover { border-color: var(--btn-primary); }
+
+  /* AI Parsing panel */
+  .ai-panel {
+    width: 500px;
+    max-width: 90%;
+    padding: 14px 16px;
+    background: #1e1e2e;
+    border: 1px solid #3a3a4e;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .ai-panel .ai-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .ai-panel .ai-title { font-weight:600; color:#eee; font-size:13px; }
+  .ai-panel .ai-badge {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;
+  }
+  .ai-panel .ai-badge.on {
+    background:rgba(46,160,67,0.15); color:#3fb950; border:1px solid rgba(46,160,67,0.3);
+  }
+  .ai-panel .ai-badge.off {
+    background:rgba(120,120,120,0.15); color:#aaa; border:1px solid #444;
+  }
+  .ai-panel .ai-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .ai-panel .ai-link {
+    font-size:11px; color:var(--btn-primary); cursor:pointer; background:none; border:none; padding:0; text-decoration:underline;
+  }
+  .ai-panel .ai-setup { display:flex; gap:8px; margin-top:10px; }
+  .ai-panel .ai-setup input {
+    flex:1; padding:8px 10px; background:#14141e; border:1px solid #444; color:#eee; border-radius:6px; font-size:12px; font-family:monospace;
+  }
+  .ai-panel .ai-setup input:focus { outline:none; border-color:var(--btn-primary); }
+  .ai-panel .ai-setup button {
+    padding:8px 14px; background:var(--btn-primary); color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;
+  }
+  .ai-panel .ai-setup button:disabled { opacity:0.5; cursor:not-allowed; }
+  .ai-panel .ai-help { margin-top:8px; color:var(--text-muted); font-size:11px; line-height:1.4; }
+  .ai-panel .ai-feedback { margin-top:8px; font-size:12px; min-height:16px; }
+  .ai-panel .ai-feedback.ok { color:#3fb950; }
+  .ai-panel .ai-feedback.err { color:#f85149; }
+  .ai-panel .ai-feedback.info { color:var(--text-secondary); }
   .upload-zone.dragover { border-color: var(--btn-primary); background: rgba(42,127,255,0.05); }
   .upload-zone input[type="file"] { display: none; }
 
@@ -953,6 +994,18 @@
 <div id="uploadScreen" class="screen upload-screen active">
   <h1>Session Replayer</h1>
   <p>Upload a session file or paste session notes to get started.</p>
+  <div id="aiPanel" class="ai-panel">
+    <div class="ai-header">
+      <div class="ai-title">AI Parsing</div>
+      <div id="aiPanelStatus"></div>
+    </div>
+    <div id="aiPanelSetup" class="ai-setup" style="display:none;">
+      <input type="password" id="aiKeyInput" placeholder="Paste your Anthropic or OpenAI API key (starts with sk-ant- or sk-)" autocomplete="off" spellcheck="false">
+      <button id="aiKeySaveBtn" type="button">Save Key</button>
+    </div>
+    <p id="aiPanelHelp" class="ai-help" style="display:none;">AI parsing makes session notes parse much more accurately. Get a key from console.anthropic.com or platform.openai.com</p>
+    <div id="aiPanelFeedback" class="ai-feedback"></div>
+  </div>
   <div id="uploadZone" class="upload-zone">
     <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
@@ -1217,6 +1270,8 @@
 <script src="shared/holdem_validator.js"></script>
 <script src="shared/shorthand_learner.js"></script>
 <script src="shared/session_storage.js"></script>
+<script src="shared/llm_adapter.js"></script>
+<script src="shared/parse_prompt.js"></script>
 <!-- SHARED_ENGINE_END -->
 <script>
 /* ============================================================
@@ -1283,6 +1338,13 @@
     qaScreen: document.getElementById("qaScreen"),
     uploadZone: document.getElementById("uploadZone"),
     fileInput: document.getElementById("fileInput"),
+    aiPanel: document.getElementById("aiPanel"),
+    aiPanelStatus: document.getElementById("aiPanelStatus"),
+    aiPanelSetup: document.getElementById("aiPanelSetup"),
+    aiKeyInput: document.getElementById("aiKeyInput"),
+    aiKeySaveBtn: document.getElementById("aiKeySaveBtn"),
+    aiPanelHelp: document.getElementById("aiPanelHelp"),
+    aiPanelFeedback: document.getElementById("aiPanelFeedback"),
     pasteTextBtn: document.getElementById("pasteTextBtn"),
     parseTextArea: document.getElementById("parseTextArea"),
     parseBlinds: document.getElementById("parseBlinds"),
@@ -3371,6 +3433,9 @@
       if (els.fileInput.files.length) handleFile(els.fileInput.files[0]);
     });
 
+    // AI Parsing panel
+    wireAIPanel();
+
     // Top bar
     els.toggleSidebarBtn.addEventListener("click", () => {
       els.sidebar.classList.toggle("collapsed");
@@ -3511,16 +3576,98 @@
     reader.readAsArrayBuffer(file);
   }
 
-  function processTextInput(text, fileName) {
-    // Try JSON first (regardless of extension)
-    try {
-      const data = JSON.parse(text);
-      if (data && (data.hands || data.action_sequence || data.version)) {
-        startQA(data);
-        return;
-      }
-    } catch (_) { /* not JSON, continue */ }
+  // ---- AI Parsing Panel ----
 
+  function renderAIPanel() {
+    const LA = window.LLMAdapter;
+    if (!LA || !els.aiPanel) return;
+
+    const keyInfo = LA.getPrimaryKey();
+    if (keyInfo) {
+      const providerLabel = keyInfo.provider === "anthropic"
+        ? "Anthropic"
+        : keyInfo.provider === "openai" ? "OpenAI" : keyInfo.provider;
+      els.aiPanelStatus.innerHTML =
+        `<span class="ai-badge on"><span class="ai-dot"></span>AI Parsing: On (${providerLabel})</span> ` +
+        `<button type="button" class="ai-link" id="aiChangeKeyBtn">change key</button>`;
+      els.aiPanelSetup.style.display = "none";
+      els.aiPanelHelp.style.display = "none";
+      els.aiPanelFeedback.textContent = "";
+      els.aiPanelFeedback.className = "ai-feedback";
+      const changeBtn = document.getElementById("aiChangeKeyBtn");
+      if (changeBtn) {
+        changeBtn.addEventListener("click", () => {
+          // Remove the current primary key and show setup
+          LA.removeKey(keyInfo.provider);
+          renderAIPanel();
+        });
+      }
+    } else {
+      els.aiPanelStatus.innerHTML =
+        `<span class="ai-badge off"><span class="ai-dot"></span>AI Parsing: Off</span>`;
+      els.aiPanelSetup.style.display = "flex";
+      els.aiPanelHelp.style.display = "block";
+    }
+  }
+
+  async function saveAIKey() {
+    const LA = window.LLMAdapter;
+    if (!LA) return;
+    const raw = (els.aiKeyInput.value || "").trim();
+    if (!raw) {
+      els.aiPanelFeedback.textContent = "Please paste a key first.";
+      els.aiPanelFeedback.className = "ai-feedback err";
+      return;
+    }
+    const provider = LA.detectProvider(raw);
+    if (provider === "unknown") {
+      els.aiPanelFeedback.textContent = "Unrecognized key format. Must start with sk-ant- or sk-.";
+      els.aiPanelFeedback.className = "ai-feedback err";
+      return;
+    }
+    els.aiPanelFeedback.textContent = "Validating...";
+    els.aiPanelFeedback.className = "ai-feedback info";
+    els.aiKeySaveBtn.disabled = true;
+    try {
+      const result = await LA.validateKey({ provider, apiKey: raw });
+      if (result.valid) {
+        LA.saveKey(provider, raw);
+        els.aiPanelFeedback.textContent = "\u2713 Key saved";
+        els.aiPanelFeedback.className = "ai-feedback ok";
+        els.aiKeyInput.value = "";
+        setTimeout(() => renderAIPanel(), 600);
+      } else {
+        els.aiPanelFeedback.textContent = "\u2717 Invalid key" + (result.error ? `: ${result.error}` : "");
+        els.aiPanelFeedback.className = "ai-feedback err";
+      }
+    } catch (err) {
+      els.aiPanelFeedback.textContent = "\u2717 Validation failed: " + (err.message || err);
+      els.aiPanelFeedback.className = "ai-feedback err";
+    } finally {
+      els.aiKeySaveBtn.disabled = false;
+    }
+  }
+
+  function wireAIPanel() {
+    if (!els.aiPanel) return;
+    if (!window.LLMAdapter) {
+      els.aiPanel.style.display = "none";
+      return;
+    }
+    els.aiKeySaveBtn.addEventListener("click", saveAIKey);
+    els.aiKeyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); saveAIKey(); }
+    });
+    els.aiKeyInput.addEventListener("paste", () => {
+      // After paste, auto-trigger validation shortly
+      setTimeout(() => {
+        if ((els.aiKeyInput.value || "").trim()) saveAIKey();
+      }, 50);
+    });
+    renderAIPanel();
+  }
+
+  function fallbackShorthand(text, fileName) {
     // Parse as shorthand text using ShorthandLearner
     try {
       const SL = window.ShorthandLearner;
@@ -3532,14 +3679,121 @@
         });
         if (result && result.hands && result.hands.length > 0) {
           startQA(result);
-          return;
+          return true;
         }
       }
     } catch (err) {
       console.warn("ShorthandLearner error:", err);
     }
+    return false;
+  }
 
-    // Fallback: show in parse screen for manual review
+  async function parseWithAI(text, fileName) {
+    const LA = window.LLMAdapter;
+    const PP = window.ParsePrompt;
+    if (!LA || !PP) return false;
+
+    const keyInfo = LA.getPrimaryKey();
+    if (!keyInfo) return false;
+
+    const blinds = session.blinds || { small: 2, big: 5 };
+    const heroSeat = 1;
+    const sessionName = (fileName || "session").replace(/\.[^.]+$/, "");
+
+    // Cost estimate
+    try {
+      const est = LA.estimateCost({ provider: keyInfo.provider, inputChars: text.length });
+      console.log(`[AI Parse] Estimated cost: ~$${est.estimatedCost} (~${est.estimatedInputTokens} input tokens)`);
+    } catch (_) {}
+
+    const chunks = PP.chunkText(text);
+    const results = [];
+    const knownPlayers = {};
+
+    els.parseStatus.textContent = chunks.length > 1
+      ? `Parsing with AI (chunk 1 of ${chunks.length})...`
+      : "Parsing with AI...";
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks.length > 1) {
+        els.parseStatus.textContent = `Parsing chunk ${i + 1} of ${chunks.length}...`;
+      }
+      const userMessage = PP.buildUserMessage({
+        text: chunks[i],
+        blinds,
+        heroSeat,
+        sessionName,
+        knownPlayers,
+        chunkIndex: i
+      });
+      let res;
+      try {
+        res = await LA.callLLM({
+          provider: keyInfo.provider,
+          apiKey: keyInfo.apiKey,
+          model: keyInfo.model,
+          endpoint: keyInfo.endpoint,
+          systemPrompt: PP.SYSTEM_PROMPT,
+          userMessage
+        });
+      } catch (err) {
+        console.warn("[AI Parse] callLLM threw:", err);
+        return false;
+      }
+      if (!res || !res.success) {
+        console.warn("[AI Parse] call failed:", res && res.error);
+        return false;
+      }
+      const parsed = PP.extractJSON(res.text);
+      if (!parsed) {
+        console.warn("[AI Parse] could not extract JSON from response");
+        return false;
+      }
+      results.push(parsed);
+      // Accumulate known players for next chunk
+      if (parsed.players) {
+        for (const [seat, p] of Object.entries(parsed.players)) {
+          if (!knownPlayers[seat]) knownPlayers[seat] = p;
+        }
+      }
+    }
+
+    const merged = PP.mergeParsedResults(results);
+    if (!PP.isValidSessionShape(merged)) {
+      console.warn("[AI Parse] merged result not valid session shape");
+      return false;
+    }
+    const handCount = (merged.hands || []).length;
+    els.parseStatus.textContent = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    startQA(merged);
+    return true;
+  }
+
+  async function processTextInput(text, fileName) {
+    // Try JSON first (regardless of extension) — bypass AI for direct JSON
+    try {
+      const trimmed = text.trim();
+      if (trimmed.startsWith("{")) {
+        const data = JSON.parse(text);
+        if (data && (data.hands || data.action_sequence || data.version)) {
+          startQA(data);
+          return;
+        }
+      }
+    } catch (_) { /* not JSON, continue */ }
+
+    // AI parse if a key is configured
+    const LA = window.LLMAdapter;
+    if (LA && LA.hasAnyKey()) {
+      const ok = await parseWithAI(text, fileName);
+      if (ok) return;
+      els.parseStatus.textContent = "AI parse failed, using fallback parser...";
+    }
+
+    // Fallback: ShorthandLearner
+    if (fallbackShorthand(text, fileName)) return;
+
+    // Final fallback: show in parse screen for manual review
     els.parseTextArea.value = text;
     els.parseStatus.textContent = `Loaded ${fileName || "file"} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
     showScreen("parse");

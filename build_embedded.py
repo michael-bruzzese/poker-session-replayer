@@ -22,6 +22,8 @@ SHARED_FILES = [
     "holdem_validator.js",
     "shorthand_learner.js",
     "session_storage.js",
+    "llm_adapter.js",
+    "parse_prompt.js",
 ]
 
 # Card image directories to search (relative to script dir, or absolute)
