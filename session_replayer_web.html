@@ -833,6 +833,18 @@
   .upload-zone.dragover { border-color: var(--btn-primary); background: rgba(42,127,255,0.05); }
   .upload-zone input[type="file"] { display: none; }
 
+  .library-section { margin-top:12px; }
+  .library-section h3 { font-size:14px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .library-item { display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.05); border-radius:6px; margin-bottom:4px; font-size:13px; cursor:pointer; }
+  .library-item:hover { background:rgba(255,255,255,0.1); }
+  .library-item .lib-name { flex:1; color:var(--text-primary); font-weight:600; }
+  .library-item .lib-meta { color:var(--text-muted); font-size:11px; }
+  .library-item .lib-fav { cursor:pointer; font-size:16px; opacity:0.3; }
+  .library-item .lib-fav.active { opacity:1; color:#ffd700; }
+  .library-item .lib-btn { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:12px; padding:2px 6px; }
+  .library-item .lib-btn:hover { color:#fff; }
+  .library-item .lib-btn.delete:hover { color:#f66; }
+
   .demo-btn {
     padding: 12px 24px;
     font-size: 15px;
@@ -949,6 +961,10 @@
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="pasteTextBtn" class="demo-btn">Paste Session Notes</button>
     <button id="learnShorthandBtn" class="demo-btn" style="background:#444; font-size:13px;">Teach Shorthand</button>
+  </div>
+  <div id="sessionLibrary" style="width:min(90%,600px); margin-top:24px;">
+    <div id="savedSessionsList"></div>
+    <div id="foldersList" style="margin-top:16px;"></div>
   </div>
 </div>
 
@@ -1200,6 +1216,7 @@
 <script src="shared/table_engine.js"></script>
 <script src="shared/holdem_validator.js"></script>
 <script src="shared/shorthand_learner.js"></script>
+<script src="shared/session_storage.js"></script>
 <!-- SHARED_ENGINE_END -->
 <script>
 /* ============================================================
@@ -2049,6 +2066,14 @@
     // Auto-save for crash recovery
     saveSessionToStorage(data);
 
+    // Auto-save to library
+    if (typeof SessionStorage !== "undefined") {
+      const saveResult = SessionStorage.saveSession(data);
+      if (saveResult.success && saveResult.id) {
+        session._libraryId = saveResult.id;
+      }
+    }
+
     els.sessionNameDisplay.textContent = session.name;
     els.handCountDisplay.textContent = `${session.hands.length} hands`;
 
@@ -2084,11 +2109,16 @@
       item.innerHTML = `
         <span class="hand-num">#${hand.hand_id || idx + 1}</span>
         <span class="hand-summary">${heroCards} ${result}</span>
+        <button class="folder-btn" data-idx="${idx}" title="Add to folder" style="background:none; border:none; cursor:pointer; font-size:14px; color:var(--text-muted); padding:2px 4px; opacity:0.4;">\ud83d\udcc1</button>
         <button class="star-btn ${hand.coach_flags && hand.coach_flags.starred ? "starred" : ""}" data-idx="${idx}">${hand.coach_flags && hand.coach_flags.starred ? "\u2605" : "\u2606"}</button>
       `;
       item.addEventListener("click", (e) => {
         if (e.target.classList.contains("star-btn")) {
           toggleStar(idx);
+          return;
+        }
+        if (e.target.classList.contains("folder-btn")) {
+          showAddToFolderDropdown(idx, e.target);
           return;
         }
         loadHand(idx);
@@ -3515,6 +3545,181 @@
     showScreen("parse");
   }
 
+  // ---- Session Library ----
+
+  function renderSessionLibrary() {
+    const SS = window.SessionStorage;
+    if (!SS) return;
+
+    const listEl = document.getElementById("savedSessionsList");
+    const foldersEl = document.getElementById("foldersList");
+    if (!listEl || !foldersEl) return;
+
+    // -- Sessions --
+    const sessions = SS.listSessions();
+    if (sessions.length === 0) {
+      listEl.innerHTML = '<div class="library-section"><h3>Saved Sessions</h3><p style="color:var(--text-muted); font-size:13px;">No saved sessions yet</p></div>';
+    } else {
+      let html = '<div class="library-section"><h3>Saved Sessions</h3>';
+      sessions.forEach(s => {
+        const sizeKB = s.sizeBytes ? (s.sizeBytes / 1024).toFixed(1) + " KB" : "";
+        const favClass = s.favorited ? "active" : "";
+        html += `<div class="library-item" data-session-id="${s.id}">
+          <span class="lib-fav ${favClass}" data-action="fav" title="Toggle favorite">\u2605</span>
+          <span class="lib-name" data-action="load">${s.name || "Unnamed"}</span>
+          <span class="lib-meta">${s.handCount || 0} hands &middot; ${sizeKB}</span>
+          <button class="lib-btn" data-action="export" title="Export">\u21e9</button>
+          <button class="lib-btn delete" data-action="delete" title="Delete">\u2715</button>
+        </div>`;
+      });
+      html += '</div>';
+      listEl.innerHTML = html;
+
+      // Event delegation for session items
+      listEl.addEventListener("click", function handleSessionClick(e) {
+        const item = e.target.closest(".library-item");
+        if (!item) return;
+        const id = item.dataset.sessionId;
+        const action = e.target.dataset.action;
+
+        if (action === "load") {
+          const data = SS.loadSession(id);
+          if (data) loadSession(data);
+        } else if (action === "fav") {
+          SS.toggleFavorite(id);
+          renderSessionLibrary();
+        } else if (action === "export") {
+          e.stopPropagation();
+          const json = SS.exportSession(id);
+          if (json) {
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = (sessions.find(s => s.id === id) || {}).name + ".json" || "session.json";
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else if (action === "delete") {
+          e.stopPropagation();
+          if (confirm("Delete this session?")) {
+            SS.deleteSession(id);
+            renderSessionLibrary();
+          }
+        }
+      });
+    }
+
+    // -- Folders --
+    const folders = SS.listFolders();
+    let fhtml = '<div class="library-section"><h3>Folders</h3>';
+    if (folders.length === 0) {
+      fhtml += '<p style="color:var(--text-muted); font-size:13px;">No folders yet</p>';
+    } else {
+      folders.forEach(f => {
+        fhtml += `<div class="library-item" data-folder-id="${f.id}">
+          <span class="lib-name" data-action="load-folder" style="padding-left:4px;">\ud83d\udcc1 ${f.name || "Unnamed"}</span>
+          <span class="lib-meta">${f.handCount || 0} hands</span>
+          <button class="lib-btn delete" data-action="delete-folder" title="Delete">\u2715</button>
+        </div>`;
+      });
+    }
+    fhtml += '<button class="lib-btn" id="createFolderBtn" style="margin-top:8px; font-size:13px; color:var(--btn-primary); padding:4px 8px;">+ Create Folder</button>';
+    fhtml += '</div>';
+    foldersEl.innerHTML = fhtml;
+
+    // Folder event delegation
+    foldersEl.addEventListener("click", function handleFolderClick(e) {
+      const item = e.target.closest(".library-item");
+      const action = e.target.dataset.action;
+
+      if (e.target.id === "createFolderBtn") {
+        const name = prompt("Folder name:");
+        if (name && name.trim()) {
+          SS.createFolder(name.trim());
+          renderSessionLibrary();
+        }
+        return;
+      }
+      if (!item) return;
+      const id = item.dataset.folderId;
+
+      if (action === "load-folder") {
+        const data = SS.loadFolder(id);
+        if (data) loadSession(data);
+      } else if (action === "delete-folder") {
+        e.stopPropagation();
+        if (confirm("Delete this folder?")) {
+          SS.deleteFolder(id);
+          renderSessionLibrary();
+        }
+      }
+    });
+  }
+
+  function showAddToFolderDropdown(handIdx, anchorEl) {
+    const SS = window.SessionStorage;
+    if (!SS) return;
+
+    // Remove any existing dropdown
+    const existing = document.querySelector(".folder-dropdown");
+    if (existing) existing.remove();
+
+    const folders = SS.listFolders();
+    const dd = document.createElement("div");
+    dd.className = "folder-dropdown";
+    dd.style.cssText = "position:absolute; background:#2a2a3e; border:1px solid #555; border-radius:6px; padding:4px; z-index:1000; min-width:140px; font-size:12px;";
+
+    if (folders.length > 0) {
+      folders.forEach(f => {
+        const opt = document.createElement("div");
+        opt.style.cssText = "padding:4px 8px; cursor:pointer; color:#eee; border-radius:4px;";
+        opt.textContent = f.name;
+        opt.addEventListener("mouseenter", () => opt.style.background = "rgba(255,255,255,0.1)");
+        opt.addEventListener("mouseleave", () => opt.style.background = "none");
+        opt.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const hand = session.hands[handIdx];
+          SS.addHandToFolder(f.id, hand, session.name);
+          dd.remove();
+        });
+        dd.appendChild(opt);
+      });
+    }
+
+    const newOpt = document.createElement("div");
+    newOpt.style.cssText = "padding:4px 8px; cursor:pointer; color:var(--btn-primary); border-radius:4px; border-top:1px solid #444; margin-top:2px;";
+    newOpt.textContent = "+ New Folder";
+    newOpt.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const name = prompt("Folder name:");
+      if (name && name.trim()) {
+        const result = SS.createFolder(name.trim());
+        if (result.success) {
+          const hand = session.hands[handIdx];
+          SS.addHandToFolder(result.id, hand, session.name);
+        }
+      }
+      dd.remove();
+    });
+    dd.appendChild(newOpt);
+
+    const rect = anchorEl.getBoundingClientRect();
+    dd.style.top = (rect.bottom + 2) + "px";
+    dd.style.left = rect.left + "px";
+    dd.style.position = "fixed";
+    document.body.appendChild(dd);
+
+    // Close on outside click
+    const closeHandler = (ev) => {
+      if (!dd.contains(ev.target)) {
+        dd.remove();
+        document.removeEventListener("click", closeHandler, true);
+      }
+    };
+    setTimeout(() => document.addEventListener("click", closeHandler, true), 0);
+  }
+
   // ---- Init ----
 
   createSeatElements();
@@ -3538,6 +3743,14 @@
     resumeRow.appendChild(resumeLink);
     resumeRow.appendChild(dismissBtn);
     els.uploadZone.parentElement.insertBefore(resumeRow, els.uploadZone.nextSibling);
+  }
+
+  // Session library initialization
+  if (typeof SessionStorage !== "undefined") {
+    SessionStorage.migrateLegacyAutoSave();
+    SessionStorage.expireOldSessions(90);
+    SessionStorage.repairManifest();
+    renderSessionLibrary();
   }
 
   showScreen("upload");

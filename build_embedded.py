@@ -21,6 +21,7 @@ SHARED_FILES = [
     "table_engine.js",
     "holdem_validator.js",
     "shorthand_learner.js",
+    "session_storage.js",
 ]
 
 # Card image directories to search (relative to script dir, or absolute)
