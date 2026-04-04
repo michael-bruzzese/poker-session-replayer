@@ -2821,7 +2821,7 @@
             questions.push({
               hand_id: hid, field: `${streetBlock.street}.amount`,
               severity: "warning",
-              question: `Hand ${hid}, ${streetBlock.street}: Seat ${action.seat} ${action.action}s — what was the amount?`,
+              question: `Hand ${hid}, ${streetBlock.street}: ${action.seat ? "Seat " + action.seat : action.position || "Unknown player"} ${action.action}s — what was the amount?`,
               context: ""
             });
           }
@@ -3044,7 +3044,7 @@
       for (const action of (streetBlock.actions || [])) {
         const amtStr = action.amount ? ` ${action.amount}` : "";
         html += `<div class="review-action-line">
-          <span class="pos">${action.position || "S" + action.seat}</span>
+          <span class="pos">${action.position || (action.seat ? "S" + action.seat : "???")}</span>
           <span class="act ${action.action}">${action.action}${amtStr}</span>
         </div>`;
       }

@@ -468,8 +468,10 @@ const HoldemValidator = (() => {
         errors.push({
           severity: "error",
           field: `${street}.actions[${i}].seat`,
-          message: `Invalid seat number: ${seat}`,
-          question: `Hand ${hid}, ${street}: Seat ${seat} is invalid. Seats are 1-${seatCount}.`
+          message: `Invalid seat number: ${seat === null || seat === undefined ? "unknown" : seat}`,
+          question: seat === null || seat === undefined
+            ? `Hand ${hid}, ${street}: A player's seat is unknown (${actions[i].position || "unknown position"} ${actions[i].action}s). Which seat (1-${seatCount})?`
+            : `Hand ${hid}, ${street}: Seat ${seat} is invalid. Seats must be 1-${seatCount}.`
         });
         continue;
       }
