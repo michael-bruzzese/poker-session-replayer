@@ -4,13 +4,15 @@
   "description": "A poker coaching playback tool for replaying live session hands step-by-step in a Zoom coaching environment.",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --exclude tests/browser/**",
+    "test:watch": "vitest",
+    "test:browser": "npx playwright test"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "playwright": "^1.59.1",
     "vitest": "^4.1.2"
   }
