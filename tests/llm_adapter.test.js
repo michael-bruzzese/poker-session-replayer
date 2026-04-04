@@ -261,6 +261,130 @@ describe("LLM Adapter — callLLM request building", () => {
 // Key Storage
 // ============================================================
 
+// ============================================================
+// Audio Transcription
+// ============================================================
+
+describe("LLM Adapter — Audio Transcription", () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  it("isAudioFile detects audio files by MIME type", () => {
+    expect(LA.isAudioFile({ type: "audio/m4a", name: "test.m4a" })).toBe(true);
+    expect(LA.isAudioFile({ type: "audio/mpeg", name: "test.mp3" })).toBe(true);
+    expect(LA.isAudioFile({ type: "audio/wav", name: "test.wav" })).toBe(true);
+    expect(LA.isAudioFile({ type: "text/plain", name: "test.txt" })).toBe(false);
+  });
+
+  it("isAudioFile detects audio files by extension", () => {
+    expect(LA.isAudioFile({ type: "", name: "recording.m4a" })).toBe(true);
+    expect(LA.isAudioFile({ type: "", name: "voice.mp3" })).toBe(true);
+    expect(LA.isAudioFile({ type: "", name: "audio.wav" })).toBe(true);
+    expect(LA.isAudioFile({ type: "", name: "notes.txt" })).toBe(false);
+    expect(LA.isAudioFile({ type: "", name: "session.json" })).toBe(false);
+  });
+
+  it("estimateTranscriptionTime scales with file size", () => {
+    expect(LA.estimateTranscriptionTime(100000)).toBeGreaterThanOrEqual(5);
+    const small = LA.estimateTranscriptionTime(500000);
+    const large = LA.estimateTranscriptionTime(5000000);
+    expect(large).toBeGreaterThan(small);
+  });
+
+  it("transcribeAudio returns error when no API key provided", async () => {
+    const result = await LA.transcribeAudio({
+      apiKey: "",
+      audioBlob: new Blob(["fake"], { type: "audio/m4a" })
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("OpenAI API key");
+  });
+
+  it("transcribeAudio returns error when no blob provided", async () => {
+    const result = await LA.transcribeAudio({
+      apiKey: "sk-test"
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No audio");
+  });
+
+  it("transcribeAudio rejects files over 25MB", async () => {
+    const bigBlob = { size: 30 * 1024 * 1024, name: "big.mp3", type: "audio/mpeg" };
+    const result = await LA.transcribeAudio({
+      apiKey: "sk-test",
+      audioBlob: bigBlob
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("too large");
+  });
+
+  it("transcribeAudio sends multipart request to Whisper", async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ text: "Hand 1: hero raises to 15", language: "en" })
+    });
+
+    const blob = new Blob(["fake audio data"], { type: "audio/m4a" });
+    blob.name = "test.m4a";
+
+    const result = await LA.transcribeAudio({
+      apiKey: "sk-test",
+      audioBlob: blob
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("Hand 1: hero raises to 15");
+    expect(result.language).toBe("en");
+
+    const [url, opts] = globalThis.fetch.mock.calls[0];
+    expect(url).toContain("api.openai.com");
+    expect(url).toContain("transcriptions");
+    expect(opts.headers["Authorization"]).toBe("Bearer sk-test");
+    // Multipart form data (FormData), not JSON
+    expect(opts.body).toBeInstanceOf(FormData);
+  });
+
+  it("transcribeAudio handles 401 auth error", async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => "unauthorized"
+    });
+
+    const blob = new Blob(["fake"], { type: "audio/m4a" });
+    const result = await LA.transcribeAudio({
+      apiKey: "sk-bad",
+      audioBlob: blob
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid API key");
+  });
+
+  it("transcribeAudio handles 413 file too large", async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 413,
+      text: async () => "too large"
+    });
+
+    const blob = new Blob(["fake"], { type: "audio/m4a" });
+    const result = await LA.transcribeAudio({
+      apiKey: "sk-test",
+      audioBlob: blob
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("too large");
+  });
+
+  it("POKER_JARGON_PROMPT contains poker terminology", () => {
+    expect(LA.POKER_JARGON_PROMPT).toContain("UTG");
+    expect(LA.POKER_JARGON_PROMPT).toContain("check-raise");
+    expect(LA.POKER_JARGON_PROMPT).toContain("three-bet");
+    expect(LA.POKER_JARGON_PROMPT).toContain("all-in");
+  });
+});
+
 describe("LLM Adapter — Key Storage", () => {
   beforeEach(() => {
     for (const k of Object.keys(_store)) delete _store[k];

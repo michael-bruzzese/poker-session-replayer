@@ -221,6 +221,86 @@ const LLMAdapter = (() => {
     return { valid: false, error: result.error };
   }
 
+  // ---- Audio Transcription (Whisper API) ----
+
+  // Poker jargon prompt — helps Whisper transcribe poker terms correctly
+  const POKER_JARGON_PROMPT = "Poker session recording. Terms: UTG, UTG+1, UTG+2, lojack, hijack, cutoff, button, small blind, big blind, three-bet, check-raise, all-in, straddle, pocket aces, ace king suited, flop, turn, river, pot, fold, raise, call, bet, check, limp, squeeze, isolate, c-bet, overpair, top pair, flush draw, straight draw, set, trips, two pair.";
+
+  const WHISPER_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
+  const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // Whisper API limit
+
+  async function transcribeAudio({ apiKey, audioBlob, language, prompt, model }) {
+    if (!apiKey) {
+      return { success: false, error: "Audio transcription requires an OpenAI API key" };
+    }
+    if (!audioBlob) {
+      return { success: false, error: "No audio data provided" };
+    }
+    if (audioBlob.size > MAX_AUDIO_BYTES) {
+      return {
+        success: false,
+        error: `Audio file too large (${(audioBlob.size / 1024 / 1024).toFixed(1)}MB). Whisper API limit is 25MB.`
+      };
+    }
+
+    const formData = new FormData();
+    formData.append("file", audioBlob, audioBlob.name || "audio.m4a");
+    formData.append("model", model || "whisper-1");
+    formData.append("language", language || "en");
+    formData.append("prompt", prompt || POKER_JARGON_PROMPT);
+
+    let response;
+    try {
+      response = await fetch(WHISPER_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: formData
+      });
+    } catch (e) {
+      const msg = e.message || "";
+      const isCors = msg.includes("CORS") || msg.includes("Failed to fetch");
+      return { success: false, error: mapError(0, msg, isCors) };
+    }
+
+    if (!response.ok) {
+      let bodyText = "";
+      try { bodyText = await response.text(); } catch (_) {}
+      if (response.status === 413) {
+        return { success: false, error: "Audio file too large for transcription." };
+      }
+      if (response.status === 400 && bodyText.toLowerCase().includes("format")) {
+        return { success: false, error: "Unsupported audio format. Try m4a, mp3, or wav." };
+      }
+      return { success: false, error: mapError(response.status, bodyText, false) };
+    }
+
+    try {
+      const data = await response.json();
+      return {
+        success: true,
+        text: data.text || "",
+        language: data.language || language
+      };
+    } catch (e) {
+      return { success: false, error: "Failed to parse transcription response" };
+    }
+  }
+
+  function estimateTranscriptionTime(fileSizeBytes) {
+    // Rough heuristic: ~1 second per 100KB of audio
+    return Math.max(5, Math.ceil(fileSizeBytes / 100000));
+  }
+
+  function isAudioFile(file) {
+    if (!file) return false;
+    const type = (file.type || "").toLowerCase();
+    if (type.startsWith("audio/")) return true;
+    const name = (file.name || "").toLowerCase();
+    return /\.(m4a|mp3|wav|webm|mp4|mpeg|mpga|ogg|flac)$/.test(name);
+  }
+
   // ---- Key Storage ----
   // Multiple keys supported — one per provider
 
@@ -289,6 +369,13 @@ const LLMAdapter = (() => {
     // Core call
     callLLM,
     validateKey,
+
+    // Audio transcription
+    transcribeAudio,
+    estimateTranscriptionTime,
+    isAudioFile,
+    POKER_JARGON_PROMPT,
+    MAX_AUDIO_BYTES,
 
     // Key storage
     getSavedKeys,
