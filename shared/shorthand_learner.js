@@ -829,6 +829,12 @@ const ShorthandLearner = (() => {
     }
 
     hand.parse_confidence = Math.min(1.0, Math.round(hand.parse_confidence * 100) / 100);
+
+    // Reject chunks that produced no actions — can't be a hand without actions
+    if (!hand.action_sequence.length) {
+      return null;
+    }
+
     return hand;
   }
 
