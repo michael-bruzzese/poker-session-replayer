@@ -2297,24 +2297,37 @@
       });
     } else {
       // Normal action: highlight seat → brief pause → apply
-      const seatIdx = (step.seat || 1) - 1;
-      playback.tableState.actionSeat = seatIdx;
-      els.seatElements[seatIdx].classList.add("pre-highlight");
-      renderSeats();
-
-      setTimeout(() => {
-        els.seatElements[seatIdx].classList.remove("pre-highlight");
+      if (!step.seat || step.seat < 1 || step.seat > SEAT_COUNT) {
+        // Unknown seat — skip the highlight, just apply (applyStepAction will skip too)
         applyStepAction(step, nextIdx);
         stepAnimating = false;
-      }, 250);
+      } else {
+        const seatIdx = step.seat - 1;
+        playback.tableState.actionSeat = seatIdx;
+        els.seatElements[seatIdx].classList.add("pre-highlight");
+        renderSeats();
+
+        setTimeout(() => {
+          els.seatElements[seatIdx].classList.remove("pre-highlight");
+          applyStepAction(step, nextIdx);
+          stepAnimating = false;
+        }, 250);
+      }
     }
   }
 
   function applyStepAction(step, nextIdx) {
+    // Skip actions with unknown seats — parser couldn't determine the player
+    if (!step.seat || step.seat < 1 || step.seat > SEAT_COUNT) {
+      playback.currentStepIndex = nextIdx;
+      render();
+      return;
+    }
+
     // Capture stacks before this action for delta display
     captureCurrentStacks();
 
-    const seatIdx = (step.seat || 1) - 1;
+    const seatIdx = step.seat - 1;
     const action = PE.normalizeActionName(step.action);
     const amount = step.amount || 0;
 
@@ -2421,7 +2434,8 @@
       if (newStreet !== playback.currentStreet && newStreet !== "preflop") {
         transitionToStreet(newStreet);
       }
-      const seatIdx = (step.seat || 1) - 1;
+      if (!step.seat || step.seat < 1 || step.seat > SEAT_COUNT) continue;
+      const seatIdx = step.seat - 1;
       playback.tableState.actionSeat = seatIdx;
       PE.applyPlayerAction(seatIdx, PE.normalizeActionName(step.action), step.amount || 0,
         playback.players, playback.tableState, SEAT_COUNT, bb, { exactAmount: true });
@@ -2486,7 +2500,8 @@
         transitionToStreet(newStreet);
       }
 
-      const seatIdx = (step.seat || 1) - 1;
+      if (!step.seat || step.seat < 1 || step.seat > SEAT_COUNT) continue;
+      const seatIdx = step.seat - 1;
       playback.tableState.actionSeat = seatIdx;
       PE.applyPlayerAction(seatIdx, PE.normalizeActionName(step.action), step.amount || 0,
         playback.players, playback.tableState, SEAT_COUNT, bb, { exactAmount: true });
