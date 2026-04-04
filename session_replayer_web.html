@@ -517,6 +517,64 @@
     transition: opacity 0.5s ease-in, transform 0.5s ease-in;
   }
 
+  /* Persistent showdown summary — stays until coach navigates away */
+  .showdown-summary {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 22;
+    background: rgba(0,0,0,0.88);
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 20px 28px;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    min-width: 420px;
+    max-width: 90%;
+    pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 24px rgba(255,215,0,0.3);
+  }
+  .showdown-summary h3 {
+    color: #ffd700;
+    font-size: 18px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-align: center;
+    margin: 0 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,215,0,0.3);
+  }
+  .showdown-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 15px;
+  }
+  .showdown-player.winner { color: #ffd700; font-weight: 700; }
+  .showdown-player.winner::before { content: "★ "; }
+  .showdown-player-name { flex: 1; font-weight: 600; }
+  .showdown-player-cards { display: flex; gap: 4px; }
+  .showdown-card {
+    width: 28px; height: 40px; background: #fff; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #000;
+    border: 1px solid #999;
+  }
+  .showdown-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
+  .showdown-player-hand { color: #bbb; font-size: 13px; min-width: 180px; text-align: right; }
+  .showdown-pot {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,215,0,0.3);
+    text-align: center;
+    font-size: 14px;
+    color: #ffd700;
+    font-weight: 700;
+  }
+
   /* Seat pre-action highlight pulse */
   .seat.pre-highlight .seat-chip {
     border-color: #fff !important;
@@ -783,12 +841,20 @@
   }
   .size-input:focus { border-color: var(--btn-primary); outline: none; }
 
-  /* Nav buttons */
+  /* Nav buttons — stable layout, primary Next button always in same position */
   .nav-buttons {
     display: flex;
     gap: 8px;
     margin-left: auto;
     align-items: center;
+    /* Reserve space so conditional buttons don't shift layout */
+    min-width: 580px;
+    justify-content: flex-end;
+  }
+  /* Conditional buttons use visibility instead of display to keep layout stable */
+  .nav-btn.conditional-hidden {
+    visibility: hidden;
+    pointer-events: none;
   }
   .nav-btn {
     padding: 10px 16px;
@@ -1377,6 +1443,8 @@
           </div>
           <!-- Street announcement -->
           <div id="streetBanner" class="street-banner"></div>
+          <!-- Persistent showdown summary — visible until coach navigates away -->
+          <div id="showdownSummary" class="showdown-summary" style="display:none;"></div>
           <!-- Action pop-up overlay -->
           <div id="actionPopup" class="action-popup">
             <div id="actionPopupPlayer" class="action-popup-player"></div>
@@ -1438,9 +1506,9 @@
         <div id="navButtons" class="nav-buttons">
           <button id="btnPrevStep" class="nav-btn" disabled>&lt;&lt; Prev</button>
           <button id="btnNextStep" class="nav-btn primary" disabled>Next &gt;&gt;</button>
-          <button id="btnBackToScript" class="nav-btn warning" style="display:none">Back to Script</button>
-          <button id="btnNewTurn" class="nav-btn new-card-btn" style="display:none">New Turn</button>
-          <button id="btnNewRiver" class="nav-btn new-card-btn" style="display:none">New River</button>
+          <button id="btnBackToScript" class="nav-btn warning conditional-hidden">Back to Script</button>
+          <button id="btnNewTurn" class="nav-btn new-card-btn conditional-hidden">New Turn</button>
+          <button id="btnNewRiver" class="nav-btn new-card-btn conditional-hidden">New River</button>
           <button id="btnPrevHand" class="nav-btn" disabled>&lt; Hand</button>
           <button id="btnNextHand" class="nav-btn" disabled>Hand &gt;</button>
         </div>
@@ -1619,6 +1687,7 @@
     dealerBtn: document.getElementById("dealerBtn"),
     coachingBanner: document.getElementById("coachingBanner"),
     streetBanner: document.getElementById("streetBanner"),
+    showdownSummary: document.getElementById("showdownSummary"),
     actionPopup: document.getElementById("actionPopup"),
     actionPopupPlayer: document.getElementById("actionPopupPlayer"),
     actionPopupAction: document.getElementById("actionPopupAction"),
@@ -1960,8 +2029,7 @@
     // Table glow in branch mode
     els.tableFelt.classList.toggle("branch-glow", inBranch);
 
-    // Nav buttons layout
-    els.navButtons.classList.toggle("script-centered", !inBranch);
+    // Nav buttons layout stays stable — no class toggling that shifts positions
 
     if ((inBranch || inScript) && hasSeat) {
       const legal = PE.getLegalActions(playback.tableState.actionSeat, playback.players, playback.tableState);
@@ -1992,13 +2060,13 @@
     els.btnPrevStep.disabled = !canGoBack;
     els.btnNextHand.disabled = !(hasSession && playback.currentHandIndex < session.hands.length - 1);
     els.btnPrevHand.disabled = !(hasSession && playback.currentHandIndex > 0);
-    els.btnBackToScript.style.display = inBranch ? "" : "none";
+    els.btnBackToScript.classList.toggle("conditional-hidden", !inBranch);
 
     // New Turn / New River — only available AFTER the card is on the board (to replace it).
     const hasTurnCard = playback.board.length >= 4;
     const hasRiverCard = playback.board.length >= 5;
-    els.btnNewTurn.style.display = hasTurnCard ? "" : "none";
-    els.btnNewRiver.style.display = hasRiverCard ? "" : "none";
+    els.btnNewTurn.classList.toggle("conditional-hidden", !hasTurnCard);
+    els.btnNewRiver.classList.toggle("conditional-hidden", !hasRiverCard);
 
     // Script mode acting prompt: show upcoming action hint
     if (inScript && !inBranch) {
@@ -2466,6 +2534,7 @@
 
     suppressStackDeltas();
     clearAllCallouts();
+    hideShowdownSummary();
     playback.currentHandIndex = idx;
     playback.mode = "script";
     playback.branchPoint = null;
@@ -2690,14 +2759,8 @@
       // Actual showdown — 2+ players show cards
       const pot = result.pot || playback.tableState.pot || "?";
       showStreetBanner("SHOWDOWN");
-      // After showdown banner fades, show result
-      setTimeout(() => {
-        const winnerSeat = result.winner_seat ? (result.winner_seat - 1) : -1;
-        const winner = winnerSeat >= 0 ? PE.getPlayerBySeat(playback.players, winnerSeat) : null;
-        const winnerName = winner ? winner.name : "Unknown";
-        const note = result.notes ? ` \u2014 ${result.notes}` : "";
-        showStreetBanner(`${winnerName} wins ${pot}${note}`);
-      }, 1800);
+      // Build the persistent showdown summary
+      buildShowdownSummary(hand, result, pot);
     } else {
       // No showdown — someone won by fold or last player standing
       const pot = result ? (result.pot || playback.tableState.pot) : playback.tableState.pot;
@@ -2710,6 +2773,66 @@
         winnerName = playersInHand[0].name;
       }
       showStreetBanner(`${winnerName} wins ${pot}`);
+      hideShowdownSummary();
+    }
+  }
+
+  function buildShowdownSummary(hand, result, pot) {
+    if (!els.showdownSummary) return;
+    const winnerSeat = result.winner_seat ? result.winner_seat - 1 : -1;
+    const activePlayers = playback.players.filter(p => p.status !== "folded");
+
+    // Collect each player's hole cards + evaluated hand
+    const HE = typeof HandEvaluator !== "undefined" ? HandEvaluator
+             : (typeof window !== "undefined" ? window.HandEvaluator : null);
+    const board = playback.board || [];
+
+    let html = '<h3>Showdown</h3>';
+    for (const p of activePlayers) {
+      const isHero = playback.tableState && playback.tableState.heroSeat === p.seat;
+      let cards = isHero ? (playback.heroCards || []) : (playback.knownVillainCards[p.seat] || []);
+      const isWinner = p.seat === winnerSeat;
+
+      // Evaluate hand if we have cards and HE is available
+      let handDescription = "";
+      if (HE && cards.length === 2 && board.length >= 3) {
+        const allCards = [...cards, ...board];
+        if (allCards.length === 7) {
+          const evalResult = HE.evaluateHand(allCards);
+          if (evalResult) handDescription = evalResult.description;
+        }
+      }
+
+      const cardsHtml = cards.map(c => {
+        const img = tryCardImage(c);
+        return img ? `<div class="showdown-card">${img}</div>` : `<div class="showdown-card">${c}</div>`;
+      }).join("");
+
+      html += `<div class="showdown-player${isWinner ? ' winner' : ''}">
+        <span class="showdown-player-name">${p.name || 'Seat ' + (p.seat + 1)}</span>
+        <span class="showdown-player-cards">${cardsHtml}</span>
+        <span class="showdown-player-hand">${handDescription}</span>
+      </div>`;
+    }
+    html += `<div class="showdown-pot">Pot: ${pot}${result.notes ? ' — ' + result.notes : ''}</div>`;
+
+    els.showdownSummary.innerHTML = html;
+    els.showdownSummary.style.display = "";
+  }
+
+  function tryCardImage(cardCode) {
+    if (!cardCode) return "";
+    if (typeof EMBEDDED_CARDS === "undefined" || !EMBEDDED_CARDS) return "";
+    const key = cardCode.charAt(0).toUpperCase() + cardCode.charAt(1).toLowerCase();
+    const dataUri = EMBEDDED_CARDS[key];
+    if (dataUri) return `<img src="${dataUri}" alt="${cardCode}" />`;
+    return "";
+  }
+
+  function hideShowdownSummary() {
+    if (els.showdownSummary) {
+      els.showdownSummary.style.display = "none";
+      els.showdownSummary.innerHTML = "";
     }
   }
 
@@ -2730,8 +2853,9 @@
   function prevStep() {
     if (playback.mode !== "script") return;
 
-    // At showdown → go back to last action step
+    // At showdown → go back to last action step (hide summary)
     if (playback.currentStreet === "showdown") {
+      hideShowdownSummary();
       replayToStep(playback.totalSteps - 1);
       render();
       return;
