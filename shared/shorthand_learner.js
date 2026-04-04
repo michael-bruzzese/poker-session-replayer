@@ -1028,7 +1028,7 @@ const ShorthandLearner = (() => {
           if (next === "around" || next === "through") {
             // Multiple folds — we can't know exactly who, add a note
             streetActions[currentStreet].push({
-              seat: 0, position: "?", action: "fold", _note: "multiple folds"
+              seat: null, position: "?", action: "fold", _note: "multiple folds"
             });
             i += 2;
             continue;
@@ -1099,7 +1099,7 @@ const ShorthandLearner = (() => {
 
       // Known position?
       if (positions[word]) {
-        return { seat: 0, position: positions[word] };
+        return { seat: null, position: positions[word] };
       }
 
       // Known player nickname?
@@ -1109,12 +1109,12 @@ const ShorthandLearner = (() => {
 
       // Generic villain?
       if (villainAliases[word]) {
-        return { seat: 0, position: "Villain" };
+        return { seat: null, position: "Villain" };
       }
     }
 
     // No actor found — default to unknown
-    return { seat: 0, position: "?" };
+    return { seat: null, position: "?" };
   }
 
   function extractAmountFromTokens(tokens, actionIdx, bb) {
