@@ -6,7 +6,7 @@ const LLMAdapter = (() => {
 
   // Default models per provider (picked for parsing quality + cost balance)
   const DEFAULT_MODELS = {
-    anthropic: "claude-sonnet-4-6",
+    anthropic: "claude-opus-4-6",
     openai: "gpt-4o"
   };
 
