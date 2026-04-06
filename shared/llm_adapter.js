@@ -6,18 +6,18 @@ const LLMAdapter = (() => {
 
   // Default models per provider (picked for parsing quality + cost balance)
   const DEFAULT_MODELS = {
-    anthropic: "claude-sonnet-4-5-20250514",
+    anthropic: "claude-sonnet-4-6-20250514",
     openai: "gpt-4o"
   };
 
   // Approximate per-token costs (USD, input tokens). Update as providers change pricing.
   // These are used ONLY for honest cost estimates — do not hide costs.
   const COST_PER_1K_INPUT_TOKENS = {
-    anthropic: { "claude-sonnet-4-5-20250514": 0.003, default: 0.003 },
+    anthropic: { "claude-sonnet-4-6-20250514": 0.003, default: 0.003 },
     openai: { "gpt-4o": 0.0025, default: 0.0025 }
   };
   const COST_PER_1K_OUTPUT_TOKENS = {
-    anthropic: { "claude-sonnet-4-5-20250514": 0.015, default: 0.015 },
+    anthropic: { "claude-sonnet-4-6-20250514": 0.015, default: 0.015 },
     openai: { "gpt-4o": 0.01, default: 0.01 }
   };
 
@@ -224,7 +224,7 @@ const LLMAdapter = (() => {
         "anthropic-dangerous-direct-browser-access": "true"
       };
       body = JSON.stringify({
-        model: model || "claude-sonnet-4-5-20250514",
+        model: model || "claude-sonnet-4-6-20250514",
         max_tokens: maxTokens || 8192,
         system: systemPrompt,
         messages: [{
