@@ -202,6 +202,108 @@ const LLMAdapter = (() => {
     };
   }
 
+  // ---- Vision / Image Call ----
+
+  async function callLLMWithImage({ provider, apiKey, model, endpoint, systemPrompt, userMessage, imageBase64, imageMimeType, maxTokens }) {
+    if (!apiKey) return { success: false, error: "API key is required" };
+    if (!imageBase64) return { success: false, error: "No image data provided" };
+
+    const effectiveProvider = provider || detectProvider(apiKey);
+    if (effectiveProvider === "unknown") {
+      return { success: false, error: "Could not detect provider from API key." };
+    }
+
+    let url, headers, body;
+
+    if (effectiveProvider === "anthropic") {
+      url = "https://api.anthropic.com/v1/messages";
+      headers = {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      };
+      body = JSON.stringify({
+        model: model || "claude-sonnet-4-5-20250514",
+        max_tokens: maxTokens || 8192,
+        system: systemPrompt,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: imageMimeType || "image/jpeg", data: imageBase64 } },
+            { type: "text", text: userMessage || "Read and parse these poker session notes." }
+          ]
+        }]
+      });
+    } else {
+      // OpenAI / compatible
+      url = endpoint || "https://api.openai.com/v1/chat/completions";
+      headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      };
+      body = JSON.stringify({
+        model: model || "gpt-4o",
+        max_tokens: maxTokens || 8192,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: [
+            { type: "image_url", image_url: { url: `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}` } },
+            { type: "text", text: userMessage || "Read and parse these poker session notes." }
+          ]}
+        ]
+      });
+    }
+
+    let response;
+    try {
+      response = await fetch(url, { method: "POST", headers, body });
+    } catch (e) {
+      const msg = e.message || "";
+      const isCors = msg.includes("CORS") || msg.includes("Failed to fetch");
+      return { success: false, error: mapError(0, msg, isCors) };
+    }
+
+    if (!response.ok) {
+      let bodyText = "";
+      try { bodyText = await response.text(); } catch (_) {}
+      return { success: false, error: mapError(response.status, bodyText, false), status: response.status };
+    }
+
+    let data;
+    try { data = await response.json(); } catch (e) {
+      return { success: false, error: "Failed to parse API response" };
+    }
+
+    const parsed = (effectiveProvider === "anthropic")
+      ? parseAnthropicResponse(data)
+      : parseOpenAIResponse(data);
+
+    return { success: true, text: parsed.text, tokensUsed: parsed.tokensUsed, provider: effectiveProvider };
+  }
+
+  function isImageFile(file) {
+    if (!file) return false;
+    const type = (file.type || "").toLowerCase();
+    if (type.startsWith("image/")) return true;
+    const name = (file.name || "").toLowerCase();
+    return /\.(jpg|jpeg|png|gif|webp|bmp|heic|heif)$/.test(name);
+  }
+
+  async function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        // Strip the data:...;base64, prefix
+        const base64 = result.split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   // ---- Key Validation ----
 
   async function validateKey({ provider, apiKey, endpoint }) {
@@ -368,7 +470,12 @@ const LLMAdapter = (() => {
 
     // Core call
     callLLM,
+    callLLMWithImage,
     validateKey,
+
+    // Image handling
+    isImageFile,
+    fileToBase64,
 
     // Audio transcription
     transcribeAudio,

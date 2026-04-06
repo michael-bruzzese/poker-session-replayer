@@ -1262,7 +1262,7 @@
   <div id="uploadZone" class="upload-zone">
     <p>Drop a session file here (.json, .txt, or any text)</p>
     <p style="margin-top:12px; font-size:13px; color:var(--text-muted)">or click to browse</p>
-    <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md,.m4a,.mp3,.wav,.webm,.ogg,audio/*">
+    <input type="file" id="fileInput" accept=".json,.txt,.docx,.text,.md,.m4a,.mp3,.wav,.webm,.ogg,audio/*,.jpg,.jpeg,.png,.gif,.webp,.heic,image/*">
   </div>
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="pasteTextBtn" class="demo-btn">Paste Session Notes</button>
@@ -4226,6 +4226,12 @@
       return;
     }
 
+    // Image files — route to vision AI (read handwritten/printed notes)
+    if (LA && typeof LA.isImageFile === "function" && LA.isImageFile(file)) {
+      handleImageFile(file);
+      return;
+    }
+
     // .docx files are ZIP archives — extract the text from the XML
     if (ext === "docx") {
       handleDocxFile(file);
@@ -4295,6 +4301,81 @@
     } catch (err) {
       els.parseStatus.textContent = `Transcription failed: ${err.message || err}`;
       els.parseTextArea.value = "";
+    }
+  }
+
+  async function handleImageFile(file) {
+    const LA = window.LLMAdapter;
+    const PP = window.ParsePrompt;
+    showScreen("parse");
+    els.parseTextArea.value = "";
+
+    // Need an API key for vision
+    const primaryKey = LA && LA.getPrimaryKey ? LA.getPrimaryKey() : null;
+    if (!primaryKey || !primaryKey.apiKey) {
+      els.parseStatus.textContent = "Reading images requires an AI API key. Add one in the AI Parsing panel above.";
+      return;
+    }
+
+    els.parseStatus.textContent = "Reading image with AI... (this may take 10-20 seconds)";
+
+    try {
+      // Convert image to base64
+      const imageBase64 = await LA.fileToBase64(file);
+      const mimeType = file.type || "image/jpeg";
+
+      // Build context for the prompt
+      const blinds = session.blinds || { small: 2, big: 5 };
+      const heroSeat = 1; // default
+      const contextParts = [];
+      contextParts.push(`[Session blinds: $${blinds.small}/$${blinds.big}]`);
+      contextParts.push(`[Hero is in seat ${heroSeat}]`);
+      const userMsg = contextParts.join("\n") + "\n\nRead the handwritten/printed poker session notes in this image. First provide a text transcription, then parse into session JSON.";
+
+      // Call LLM with image
+      const result = await LA.callLLMWithImage({
+        provider: primaryKey.provider,
+        apiKey: primaryKey.apiKey,
+        model: primaryKey.model,
+        systemPrompt: PP.IMAGE_PARSE_PROMPT,
+        userMessage: userMsg,
+        imageBase64,
+        imageMimeType: mimeType,
+        maxTokens: 8192
+      });
+
+      if (!result.success) {
+        els.parseStatus.textContent = `Image reading failed: ${result.error}`;
+        return;
+      }
+
+      // Extract the transcription (text between <transcription> tags)
+      const transcription = PP.extractTranscription(result.text);
+      if (transcription) {
+        els.parseTextArea.value = transcription;
+        els.parseStatus.textContent = "Image read successfully. Transcription shown above. Parsing session...";
+      } else {
+        els.parseTextArea.value = result.text;
+        els.parseStatus.textContent = "Image read. Parsing session...";
+      }
+
+      // Extract JSON from the response
+      const parsed = PP.extractJSON(result.text);
+      if (parsed && PP.isValidSessionShape(parsed)) {
+        // Store the original transcription on the session for export
+        parsed._originalTranscription = transcription || result.text;
+        startQA(parsed);
+      } else {
+        // JSON extraction failed — try parsing the transcription as text
+        els.parseStatus.textContent = "Could not extract session JSON from image. Trying text parser on transcription...";
+        if (transcription) {
+          await processTextInput(transcription, file.name);
+        } else {
+          els.parseStatus.textContent = "Could not parse the image. Try uploading a clearer photo or type the notes manually.";
+        }
+      }
+    } catch (err) {
+      els.parseStatus.textContent = `Image reading failed: ${err.message || err}`;
     }
   }
 
@@ -4534,6 +4615,8 @@
     }
     const handCount = (merged.hands || []).length;
     els.parseStatus.textContent = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    // Store original input text for export
+    merged._originalInput = text;
     startQA(merged);
     return true;
   }
@@ -4591,6 +4674,7 @@
           <span class="lib-fav ${favClass}" data-action="fav" title="Toggle favorite">\u2605</span>
           <span class="lib-name" data-action="load">${s.name || "Unnamed"}</span>
           <span class="lib-meta">${s.handCount || 0} hands &middot; ${sizeKB}</span>
+          <button class="lib-btn" data-action="export-txt" title="Export original notes as text">TXT</button>
           <button class="lib-btn" data-action="export-json" title="Export JSON">JSON</button>
           <button class="lib-btn" data-action="export-phh" title="Export PokerStars HH (for trackers)">HH</button>
           <button class="lib-btn delete" data-action="delete" title="Delete">\u2715</button>
@@ -4612,6 +4696,22 @@
         } else if (action === "fav") {
           SS.toggleFavorite(id);
           renderSessionLibrary();
+        } else if (action === "export-txt") {
+          e.stopPropagation();
+          const sessionData = SS.loadSession(id);
+          const origText = sessionData && (sessionData._originalInput || sessionData._originalTranscription);
+          if (origText) {
+            const blob = new Blob([origText], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const name = ((sessions.find(s => s.id === id) || {}).name || "session").replace(/[^a-z0-9]/gi, "_");
+            a.download = name + "_original_notes.txt";
+            a.click();
+            URL.revokeObjectURL(url);
+          } else {
+            alert("No original input text available for this session. Only sessions parsed from text, audio, or images have original notes.");
+          }
         } else if (action === "export-json") {
           e.stopPropagation();
           const json = SS.exportSession(id);

@@ -259,6 +259,20 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
   // ---- Validation ----
 
+  const IMAGE_PARSE_PROMPT = `You are reading a photo of handwritten or printed poker session notes. Do TWO things:
+
+1. First, output an exact text transcription of everything written in the image, preserving the original wording as closely as possible. Put this between <transcription> and </transcription> tags.
+
+2. Then, parse the transcribed notes into structured JSON following the poker session schema below. Output the JSON after the transcription.
+
+` + SYSTEM_PROMPT;
+
+  function extractTranscription(responseText) {
+    if (!responseText) return "";
+    const match = responseText.match(/<transcription>([\s\S]*?)<\/transcription>/);
+    return match ? match[1].trim() : "";
+  }
+
   function isValidSessionShape(data) {
     if (!data || typeof data !== "object") return false;
     if (!Array.isArray(data.hands)) return false;
@@ -274,7 +288,9 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
     chunkText,
     extractJSON,
     mergeParsedResults,
-    isValidSessionShape
+    isValidSessionShape,
+    IMAGE_PARSE_PROMPT,
+    extractTranscription
   };
 })();
 
