@@ -11804,7 +11804,16 @@ if (typeof module !== "undefined" && module.exports) {
   }
 
   async function processTextInput(text, fileName) {
-    // Try JSON first (regardless of extension) — bypass AI for direct JSON
+    // Read blinds/hero seat from parse screen inputs (if set), else defaults
+    const blindsVal = els.parseBlinds.value.trim();
+    const blindsParts = blindsVal.split("/");
+    const blinds = blindsParts.length === 2
+      ? { small: parseInt(blindsParts[0]) || 2, big: parseInt(blindsParts[1]) || 5 }
+      : (session.blinds || { small: 2, big: 5 });
+    const heroSeat = parseInt(els.parseHeroSeat.value) || 1;
+    const sessionName = (fileName || "session").replace(/\.[^.]+$/, "");
+
+    // 1. Try JSON
     try {
       const trimmed = text.trim();
       if (trimmed.startsWith("{")) {
@@ -11816,18 +11825,29 @@ if (typeof module !== "undefined" && module.exports) {
       }
     } catch (_) { /* not JSON, continue */ }
 
-    // AI parse if a key is configured
+    // 2. Try TabularParser (deterministic, local, handles structured notes)
+    const TP = window.TabularParser;
+    if (TP && TP.isTabularFormat(text)) {
+      const result = TP.parse(text, { blinds, heroSeat, sessionName });
+      if (result && result.hands && result.hands.length > 0) {
+        els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from tabular notes.`;
+        startQA(result);
+        return;
+      }
+    }
+
+    // 3. Try ShorthandLearner (local, pattern-based)
+    if (fallbackShorthand(text, fileName)) return;
+
+    // 4. AI parse if a key is configured
     const LA = window.LLMAdapter;
     if (LA && LA.hasAnyKey()) {
       const ok = await parseWithAI(text, fileName);
       if (ok) return;
-      els.parseStatus.textContent = "AI parse failed, using fallback parser...";
+      els.parseStatus.textContent = "AI parse failed.";
     }
 
-    // Fallback: ShorthandLearner
-    if (fallbackShorthand(text, fileName)) return;
-
-    // Final fallback: show in parse screen for manual review
+    // 5. Final fallback: show in parse screen for manual review
     els.parseTextArea.value = text;
     els.parseStatus.textContent = `Loaded ${fileName || "file"} (${text.length} chars). Could not auto-parse — review the text and try "Parse & Load".`;
     showScreen("parse");
