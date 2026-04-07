@@ -92,11 +92,18 @@ describe("Hand Validation — Hero Cards", () => {
   it("rejects invalid hero card format", () => {
     const errors = HoldemValidator.validateHand({
       hand_id: 1, hero_seat: 1, button_seat: 9,
-      hero_cards: ["Ah", "XX"],
+      hero_cards: ["Ah", "ZZ"],
       board: {},
       action_sequence: []
     });
     expect(errors.some(e => e.field === "hero_cards[1]")).toBe(true);
+  });
+
+  it("accepts blank cards (Xx, Xh)", () => {
+    expect(HoldemValidator.isValidCard("Xx")).toBe(true);
+    expect(HoldemValidator.isValidCard("Xh")).toBe(true);
+    expect(HoldemValidator.isValidCard("Xs")).toBe(true);
+    expect(HoldemValidator.isValidCard("XX")).toBe(true); // case insensitive
   });
 });
 
@@ -855,8 +862,8 @@ describe("Implicit Action Inference", () => {
     // First action is seat 4 betting — seat 1 should have checked first.
     const inferred = HoldemValidator.inferImpliedActions(hand, 9);
     expect(inferred.length).toBeGreaterThan(0);
-    expect(inferred[0].seat).toBe(1);
-    expect(inferred[0].action).toBe("check");
+    const flopCheck = inferred.find(i => i.street === "flop" && i.seat === 1 && i.action === "check");
+    expect(flopCheck).toBeTruthy();
 
     // The flop actions should now start with the inferred check
     const flopBlock = hand.action_sequence.find(s => s.street === "flop");

@@ -11,7 +11,16 @@ const CardUtils = (() => {
 
   function formatCard(code) {
     if (!code || code.length < 2) return "??";
+    // Blank/unknown card support
+    if (code[0].toUpperCase() === "X") {
+      if (code[1].toLowerCase() === "x") return "??";
+      return "?" + code[1].toLowerCase(); // ?h, ?s, ?d, ?c
+    }
     return `${code[0].toUpperCase()}${code[1].toLowerCase()}`;
+  }
+
+  function isBlankCard(code) {
+    return code && code.length === 2 && code[0].toUpperCase() === "X";
   }
 
   function cardPrettyName(code) {
@@ -22,6 +31,8 @@ const CardUtils = (() => {
   }
 
   function cardImageCandidates(code) {
+    // Blank cards → use card back
+    if (code && code[0].toUpperCase() === "X") return backImageCandidates();
     const rank = code[0].toUpperCase();
     const suit = code[1].toLowerCase();
     const rankVariants = [rank, rank.toLowerCase()];
@@ -120,6 +131,7 @@ const CardUtils = (() => {
 
   return {
     formatCard,
+    isBlankCard,
     cardPrettyName,
     cardImageCandidates,
     backImageCandidates,

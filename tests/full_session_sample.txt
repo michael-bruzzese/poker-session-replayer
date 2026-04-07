@@ -1,0 +1,264 @@
+1    Fold    EP1    7h 3s     n/a     Pre: EP1 f, H f
+2    Limp Pot (MW)    BB    Kh 2c     $1,000     "Pre: EP1 c, LJ c, HJ c, BTN c, H x
+Flop (27): Kc 3c 4s --- H x,x,x,x,x
+Turn (27): Ah --- H x,x,x,x,x
+River (27): 2h --- H b 15, f,f,f,f "
+3    3BP OOP (MW)    SB    Ac Jh     $450     "Pre: f to LJ b 20, CO c, BTN c, H r 150, BB f, LJ c, CO f, BTN c
+Flop (470): Jd 7h 7s --- H x, LJ x, BTN jam 200, H c, LJ f
+Turn (870): 6h ---
+River (870): 8d ---
+
+BTN wins 9d 7d "
+4    Fold    BTN    9s 3c     n/a     Action in front, f
+5    Fold    CO    Js 6s     n/a     Action in front, f
+6    Fold    HJ    7s 3s     n/a     Action in front, f
+7    Fold    EP2    5c 3d     n/a     f
+8    Fold    EP1    7s 5d     n/a     f
+9    SRP OOP (MW)    EP1    2c 2d     $1,000     "Pre: H r 25, LJ c, CO c, SB c
+Flop (105): Qd 7s 7h --- x, H x,x,x
+Turn (105): As --- x, H x,x,x
+River (105): 7c --- SB b 80, H f,f,f"
+10    Fold    BB    Ad 7c     n/a     Action in front, f
+11    Fold    SB    Qs 4s     n/a     Action in front, f
+12    Fold    BTN    Kc 8h     n/a     Straddle on, f to H, f
+13    Fold    CO    Js 4d     n/a     EP1 c, EP2 c, HJ c, H f
+14    Fold    HJ    7h 2h     n/a     EP1 b 20, LJ c, H f
+15    Fold    LJ    Qd 9h     n/a     f to H, f
+16    Fold    EP2    9d 4c     n/a     f
+17    Fold    EP1    Jh 8s     n/a     f
+18    Fold    BB    Qs 4d     n/a     EP1 b 30, CO c, f
+19    Fold    SB    Qh 7c     n/a     EP2 b 20, all f
+20    Fold    BTN    Kh 8c     n/a     f to HJ b 20, H f
+21    Fold    CO    9h 4s     n/a     f to H, f
+22    Fold    HJ    8c 3s     n/a     EP2 b 20, all f
+23    Fold    LJ    Jd 7s     n/a     f to H, f
+24    3BP OOP (MW)    EP2    Jd Jh     $1,025     "Pre: EP1 f, H b 25, LJ (TR) r 75, CO (Fish) c, H c
+Flop (232): Kd Kc 9c --- H x,x,x
+Turn (232): Jc --- H x, LJ b 125, CO f, H r 325, LJ c
+River (882): 6d --- H jam 625, LJ c
+
+LJ mucks "
+25    Fold    CO    9s 4d     n/a     2x limps, f
+26    SRP OOP (MW)    EP1    9d 9h     $600     "Pre: H r 25 c, CO c, BB c,
+Flop (77): Ad 4h As --- x,H x,x
+Turn (77): 8s --- x, H b 25, CO f, BB c
+River (127): Js --- BB b 50, H c
+
+BB loses 6d 5d"
+27    Fold    BB    8d 3s     n/a     EP2 b 20, f
+28    Fold    SB    9d 4s     n/a     EP1 b 20, CO c, f
+29    Fold    BTN    7h 5s     n/a     CO c, f
+30    Fold    CO    8h 2d     n/a     EP1 b 25, HJ c, f
+31    Fold    HJ    4c 3s     n/a     EP2 b 20, f
+32    Fold    LJ    9h 6h     n/a     f to H, f
+33    Fold    EP2    Kh 5h     n/a     EP1 c, f
+34    Fold    EP1    Qc 9d     n/a     f
+35    SRP OOP (MW)    BB    6h 6s     $1,000     "Pre: EP1 b 10, EP2 c, CO c, BTN r 50, SB f, H c, EP1 c, EP2 f, CO f
+Flop (170): 9d Kc Jd --- H x,x,x
+Turn (170): 9c --- H x,x,x
+River (170): Qh --- H x,x,x
+
+BTN wins Ad Qs"
+36    Fold    SB    6d 4s     n/a     EP2 b 20, HJ c, f
+37    Fold    BTN    Kh 3c     n/a     Straddle on, LJ c, HJ c, f
+38    Fold    CO    8d 4s     n/a     f to H, f
+39    Fold    HJ    Qh 2h     n/a     f to H, f
+40    Fold    LJ    Jh 3s     n/a     f to H, f
+41    Fold    EP2    9s 2d     n/a     f to H, f
+42    Fold    EP1    9s 2d     n/a     f
+43    Fold    BB    Kd 7s     n/a     EP1 b 15, LJ r 40, BTN c, f
+44    Fold    SB    7s 6s     n/a     EP1 b 15, f to BTN r 50, f
+45    Fold    BTN    3d 2s     n/a     Straddle on, EP3 c, CO c, f
+46    Fold    CO    6d 4s     n/a     f to H, f
+47    Fold    HJ    6h 5d     n/a     f to H, f
+48    SRP IP (MW)    LJ    Qh Td     $1,500     "Pre: EP1 c, f to H r 30, BB c, EP1 c
+Flop (92): Kh Kc 4d --- x,x, H x
+Turn (92): 8h --- x,x, H b 35, f,f"
+49    Fold    EP2    Jd 2s     n/a     EP1 b 25, f
+50    SRP OOP    EP1    Ac Jd     $1,500     "Pre: H r 25, BTN (Louis, F) c
+Flop (57): Kd Qd 4d --- H x, BTN b 55, H c
+Turn (167): Ad --- H x, BTN b 100, H r 300, BTN f"
+51    Fold    BB    9c 8h     n/a     EP1 b 25, f
+52    Fold    SB    Ts 7s     n/a     f to BTN b 20, f
+53    Fold    BTN    Qd 7d     n/a     Staddle on, EP3 c, CO c, f
+54    Fold    CO    6s 3s     n/a     EP2 b 20, f
+55    Fold    HJ    As 3d     n/a     EP2 c, EP3 c, LJ c, H f
+56    Fold    LJ    7h 6s     n/a     EP1 c, EP2 c, f
+57    Fold    EP3    Qd 4s     n/a     f to H, f
+58    Fold    EP2    Qh Td     n/a     f to H, f
+59    3BP OOP    EP1    4d 4c     $1,400     "Pre: H r 25, CO (Louis, F) r 75, H c
+Flop (157): Tc 9c 6c --- x, CO b 150, H f"
+60    Fold    BB    8s 6d     n/a     EP1 b 15, EP2 r 30, EP3 r 100, f
+61    Fold    SB    5c 3c     n/a     EP2 b 20, CO r 85, f
+62    Fold    BTN    4h 3c     n/a     HJ b 30, f
+63    Fold    CO    Qc 4c     n/a     LJ b 20, HJ c, f
+64    Fold    BTN    Ts 4d     n/a     Straddle on, f to H, f
+65    Fold    CO    Qh 9s     n/a     EP2 c, f
+66    Fold    HJ    Qd 7s     n/a     f to H, f
+67    Fold    LJ    Ah 7d     n/a     f to H, f
+68    Fold    EP1    Jh 3c     n/a     f to H, f
+69    Fold    BB    9s 3d     n/a     CO b 15, BTN c, f
+70    Fold    SB    Jh 4s     n/a     HJ b 20, f
+71    Fold    BTN    Ac 5h     n/a     f to H, f
+72    Fold    EP1    Kc 7d     n/a     f
+73    Limped Pot    BB    6s 2c     $500     "Pre: EP1 c, EP2 c, CO c, H x
+Flop (32): Jc 7h 7c --- H x,x,x,x
+Turn (32): 2s --- H x, x,x,x
+River (32): 3s --- H x,x,x,x
+
+EP1 wins 6h 6c"
+74    Fold    SB    Ac 3s     n/a     HJ b 20, BTN c, f
+75    Fold    BTN    6s 5d     n/a     EP2 c, EP3 c, H f
+76    Fold    CO    Jc 3h     n/a     EP1 c, H f
+77    Fold    HJ    6d 4h     n/a     f to H, f
+78    Fold    BB    8h 4s     n/a     HJ b 20, f
+79    Fold    SB    7d 2s     n/a     LJ b 20, BTN c, f
+80    Fold    BTN    Kd 2d     n/a     CO r 15, f
+81    Fold    HJ    6d 2h     n/a     f to H, f
+82    Fold    EP1    Jc 3c     n/a     f
+83    Fold    BB    9s 5d     n/a     blinds chopped
+84    SRP OOP (MW)    SB    5h 5d     $1,500     "Pre: Straddle on, HJ b 40, CO c, BTN c, H c
+Flop (170): Ks 5c As --- H x, HJ x, CO b 150, BTN c, H r 700, f,f,f"
+85    SRP OOP    SB    Ks Td     $1,200     "Pre: EP3 c, CO c, H b 35, BB c, EP3 f, CO f
+Flop (87): Tc 6s 4h --- H b 25, BB f"
+86    Fold    BTN    Jc 6s     n/a     f to H, f
+87    3BP IP    CO    Ah 6h     $1,000     "Pre: HJ b 15, H r 45, HJ c
+Flop (97): As 9s 3h --- x, H b 40, HJ f"
+88    Fold    HJ    9d 8h     n/a     f to H, f
+89    Fold    BB    Td 2c     n/a     EP1 b 15, LJ c, HJ c, f
+90    Fold    SB    Js 6h     n/a     blinds chopped
+91    SRP IP    BTN    Qc 8c     $1,500     Straddle on, EP3 c, f to H b 50, f
+92    SRP IP    CO    Kc 7c     $800     "Pre: f to H b 25, BB (Leake, Fish) c
+Flop (52): Kd Js 8s --- BB b 25, H c
+Turn (102): Qd --- BB b 50, H c
+River (202): 6h --- BB b 100, H c
+
+BB loses As Qs"
+93    Fold    EP1    8c 5h     n/a     f
+94    Limped pot    BB    4d 3d     $1,100     "Pre: EP1 c, EP3 c, BTN c, H x
+Flop (27): Jd Qh 5s --- H x,x,x,x
+Turn (27): 8d --- H x,x,x,x
+River (27): Jh --- H x,x,x,x
+
+EP1 wins 7s 7c"
+95    Fold    SB    Td 8c     n/a     CO b 15, f
+96    Fold    BTN    4c 2c     n/a     HJ b 20, f
+97    Fold    CO    Th 6s     n/a     f to H, f
+98    SRP IP (MW)    HJ    Qs Td     $600     "Pre: f to H b 25, BTN c, SB c
+Flop (80): 8s 2d 6h --- x, H x, x
+Turn (80): 5s --- x, H b 60, f, f"
+99    Fold    LJ    Kd 2d     n/a     f to H, f
+100    Fold    BB    9d 2s     n/a     Lj b 15, CO c, BTN c, f
+101    Fold    SB    3d 2c     n/a     HJ b 20, CO c, f
+102    Fold    BTN    8d 3h     n/a     LJ b 15, CO r 30, f
+103    SRP IP    CO    Qs Jd     $500     "Pre: EP2 c, LJ c, H b 30, SB c, EP2 f, LJ f
+Flop (75): 2c 4h 6s --- x, H b 30, SB c
+Turn (135): Ts --- x, H b 55, SB c
+River (245): 5d --- x, H b 90, SB r 180, f "
+104    SRP OOP    HJ    Ac As     $650     "Pre: f to H b 25, BTN c
+Flop (57): 9c 8c 5d --- H x, x
+Turn (57): 3c --- H b 50, f"
+105    Fold    EP1    5d 4h     n/a     f
+106    Limped Pot    BB    Qd 2d     $1,000     "Pre: 4x limps
+Flop (57): Kh Th 9c --- H x,x,x, CO b 15, all f"
+107    Fold    SB    Ks 7d     n/a     CO b 15, BTN c, f
+108    SRP IP (MW)    BTN    Kd Qd     $1,600     "Pre: EP1 b 15, f to H r 50, SB c, EP1 c
+Flop (155): Jd Tc 4h --- x,x, H x
+Turn (155): As --- x, EP1 b 35, H r 125, f, f"
+109    Fold    CO    Ts 6d     n/a     f to H, f
+110    Fold    HJ    Jh 9s     n/a     f to H, f
+111    SRP IP    LJ    8c 7c     $400     "Pre: f to H b 25, BB c
+Flop (52): As 4d Qc --- x, H x
+Turn (52): Qh --- BB b 50, H f"
+112    Fold    EP2    Td 4s     n/a     f to H, f
+113    Fold    EP1    Jh Ts     n/a     f
+114    Fold    BB    9c 5d     n/a     blinds chopped
+115    Fold    SB    Qd 7s     n/a     3x limps to H, f
+116    Fold    BTN    Jc 2s     n/a     Straddle on, 3x limps to H, f
+117    Fold    CO    Qs 3h     n/a     EP1 b 20, LJ c, HJ c, f
+118    Fold    HJ    Tc 5s     n/a     f to H, f
+119    Fold    LJ    4s 3c     n/a     f to H, f
+120    Fold    EP3    4s 3d     n/a     f to H, f
+121    Fold    EP2    7c 5c     n/a     f to H, f
+122    Fold    EP1    Qh 9h     n/a     f
+123    Fold    BB    5d 4h     n/a     blinds chopped
+124    Fold    SB    5h 4s     n/a     HJ b 20, CO c, f
+125    Fold    BTN    Ad 4s     n/a     EP3 c, LJ c, HJ c, CO c, f
+126    SRP IP (Donk)    CO    5h 4h     $700     "Pre: EP2 c, f to H b 35, SB c, EP2 f
+Flop (80): As Jh 8c --- SB b 50, H f"
+127    Fold    HJ    Qs 3d     n/a     f to H, f
+128    Fold    LJ    4d 3c     n/a     f to H, f
+129    SRP OOP (MW)    EP3    7s 7d     $1,000     "Pre: f to H b 25, CO c, BTN c, SB c
+Flop (105): Ad 2h 3h --- x, H x, CO b 50, all f"
+130    SRP OOP (MW)    EP2    Kh Qh     $600     "Pre: f to H b 25, EP3 (Leake, F) c, HJ c, SB c
+Flop (105): 6s 9s Td --- x, H x, EP3 b 40, HJ f, SB f, H c
+Turn (185): Qd --- H x, x
+River: (185): 2d --- H b 50, EP3 c
+
+EP3 mucks"
+131    Fold    EP1    Ks 9d     n/a     f
+132    Fold    BB    3h 2h     n/a     EP1 b 20, CO c, f
+133    Fold    SB    7d 5c     n/a     EP1 b 20, LJ c, HJ c, f
+134    Fold    BTN    Td 5d     n/a     LJ b 20, HJ c, f
+135    SRP IP (MW)    CO    9h 7h     $1,100     "Pre: EP1 b 15, EP3 c, H c, BTN c, BB c
+Flop (77): Qc 3c Kh --- BB b 40, EP1 c, EP3 c, H f"
+136    SRP IP    HJ    7c 6c     $1,000     "Pre: EP2 c, f to H b 30, SB c, EP2 f
+Flop (70): Ad 4d Tc --- SB x, H x
+Turn (70): As --- SB b 35, H c
+River: (140): 6d --- SB x, H b 110, SB f"
+137    Fold    LJ    Qd 8c     n/a     f to H, f
+138    Fold    EP3    Td 8h     n/a     f to H, f
+139    3BP OOP (MW)    EP2    8d 7d     $1,600     "Pre: f to H b 25, EP3 r 50, LJ c, H c
+Flop (157): Qc 6c 5s --- H x, x, x
+Turn (157): 5d --- H x, EP3 b 100, LJ c, H f"
+140    Fold    BB    7s 2d     n/a     EP1 b 30, CO c, f
+141    Fold    SB    Qs 5s     n/a     HJ b 20, f
+142    Fold    BTN    Qc 9h     n/a     EP1 b 15, f
+143    SRP IP (MW)    CO    Kh Td     $1,200     "Pre: EP2 c, f to H b 30, BTN (Leake, Fish)c, SB c, BB c, EP2 f
+Flop (125): Th 8h Qh --- x, x, H x, BTN b 100, f, f, Hc
+Turn (325): As --- H x, BTN b 100, H c
+River: (525): Jh --- H x, BTN x
+
+BTN mucks"
+144    Fold    HJ    7d 4s     n/a     f to H, f
+145    Fold    LJ    Kc 4s     n/a     f to H, f
+146    Fold    EP3    4c 3h     n/a     f to H, f
+147    Fold    EP2    Qs 8h     n/a     f to H, f
+148    SRP OOP (MW)    EP1    Kd Qs     $1,000     "Pre: H b 25, EP2 (Leake, Fish)c, LJ c, SB c, BB c
+Flop (100): Jh 2d 9h --- x, x, H x, EP2 b 100, f, f, H c
+Turn (300): 3h --- H x, EP2 x
+River: (300): 7h --- H b 200, EP2 f"
+149    SRP OOP (MW)    BB    Qs 8s     $1,000     "Pre: EP2 c, EP3 b 15, BTN c, H c, EP2 c
+Flop (62): 8c 6d 6s --- H x, x, EP3 b 30, BTN c, H f"
+150    SRP OOP (MW)    SB    Jh Th     $1,000     EP2 c, f to H b 45, all f
+151    Fold    BTN    Kc 2s     n/a     f to H, f
+152    SRP IP (MW)    CO    2c 2d     $1,300     "Pre: LJ b 15, H c, BTN c, SB c, BB c
+Flop (75): Qh 7h Jc --- x, BB b 30, LJ r 250, H f"
+153    Fold    HJ    Ah 3c     n/a     f to H, f
+154    Fold    LJ    Jd 2s     n/a     f to H, f
+155    Fold    EP3    3d 2c     n/a     f to H, f
+156    Fold    BB    As 9c     n/a     EP3 c, CO b 25, f
+157    Fold    SB    6d 4h     n/a     EP1 b 20, LJ c, f
+158    Fold    BTN    Kc 3d     n/a     EP2 b 30, CO c, f
+159    Fold    CO    9d 7s     n/a     f to H, f
+160    Fold    HJ    Jh Tc     n/a     Straddle on, EP2 c, LJ c, f
+161    Fold    LJ    Ts 5d     n/a     f to H, f
+162    Fold    EP2    Ad 8h     n/a     f to H, f
+163    Fold    BB    Jc 8d     n/a     EP1 b 25, LJ c, f
+164    3BP OOP (MW)    SB    Ac Ks     $1,000     EP1 b 25, f to H r 100, all f
+165    Fold    BTN    Kd 2s     n/a     EP2 b 20, HJ c, f
+166    Fold    CO    Kd 2c     n/a     EP1 b 20, EP3 c, f
+167    Fold    HJ    Th 2s     n/a     f to H, f
+168    Fold    LJ    Ac 6h     n/a     f to H, f
+169    SRP OOP (MW)    EP2    As Kc     $200     "Pre: f to H b 25, HJ (Amir, Fish)c, BB c
+Flop (77): Th 9c 4s --- x, H x, x
+Turn (77): 2h --- x, H x, HJ b 25, BB f, H jam 150, HJ c
+River: (377): Qd ---
+
+HJ chops pot Ah Kh"
+170    Fold    BB    Qs 3h     n/a     blinds chopped
+171    Fold    SB    4s 3c     n/a     blinds chopped
+172    3BP IP    BTN    Ac Jc     $1,100     "Pre: f to LJ b 20, f to H r 65, LJ c
+Flop (137): Th 6h 3c --- LJ x, H b 40, LJ c
+Turn (217): 6d --- LJ x, H b 85, LJ c
+River: (387): 6s --- LJ b 165, H jams 910, LJ f"

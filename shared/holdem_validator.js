@@ -17,6 +17,10 @@ const HoldemValidator = (() => {
 
   function isValidCard(code) {
     if (!code || typeof code !== "string" || code.length !== 2) return false;
+    // Support unknown/blank cards: Xx (fully unknown), Xh/Xs/Xd/Xc (unknown rank, known suit)
+    if (code[0].toUpperCase() === "X") {
+      return code[1].toLowerCase() === "x" || VALID_SUITS.has(code[1].toLowerCase());
+    }
     return VALID_RANKS.has(code[0].toUpperCase()) && VALID_SUITS.has(code[1].toLowerCase());
   }
 
@@ -31,6 +35,8 @@ const HoldemValidator = (() => {
     for (const card of cards) {
       const norm = normalizeCard(card);
       if (!norm) continue;
+      // Skip blank/unknown cards from duplicate checking
+      if (norm[0] === "X") continue;
       if (seen.has(norm)) dupes.push(norm);
       seen.add(norm);
     }
@@ -45,8 +51,9 @@ const HoldemValidator = (() => {
    * @param {number} seatCount - Number of seats (default 9)
    * @returns {Array<{severity: string, field: string, message: string, question: string}>}
    */
-  function validateHand(hand, seatCount) {
+  function validateHand(hand, seatCount, opts) {
     seatCount = seatCount || 9;
+    const tolerant = !!(opts || {}).tolerant; // strict by default, opt-in to tolerant
     const errors = [];
     const hid = hand.hand_id || "?";
 
@@ -262,7 +269,7 @@ const HoldemValidator = (() => {
       }
 
       // Validate individual actions
-      const streetErrors = validateStreetActions(streetBlock, hand, seatCount);
+      const streetErrors = validateStreetActions(streetBlock, hand, seatCount, { tolerant });
       errors.push(...streetErrors);
     }
 
@@ -365,7 +372,8 @@ const HoldemValidator = (() => {
 
   // ---- Street Action Validation ----
 
-  function validateStreetActions(streetBlock, hand, seatCount) {
+  function validateStreetActions(streetBlock, hand, seatCount, opts) {
+    const tolerant = !!(opts || {}).tolerant;
     const errors = [];
     const hid = hand.hand_id || "?";
     const street = streetBlock.street;
@@ -429,12 +437,14 @@ const HoldemValidator = (() => {
             const expectedPos = actions.find(a => a.seat === expectedSeat)?.position || `Seat ${expectedSeat}`;
             const streetLabel = street === "preflop" ? "Preflop" : street.charAt(0).toUpperCase() + street.slice(1);
 
-            errors.push({
-              severity: "error",
-              field: `${street}.action_order`,
-              message: `${streetLabel} action out of order: ${actualPos} (seat ${actualSeat}) acts before ${expectedPos} (seat ${expectedSeat})`,
-              question: `Hand ${hid}, ${street}: ${actualPos} acts before ${expectedPos}, but ${expectedPos} should act first. Is the action order correct, or is there a transcription error?`
-            });
+            if (!tolerant) {
+              errors.push({
+                severity: "error",
+                field: `${street}.action_order`,
+                message: `${streetLabel} action out of order: ${actualPos} (seat ${actualSeat}) acts before ${expectedPos} (seat ${expectedSeat})`,
+                question: `Hand ${hid}, ${street}: ${actualPos} acts before ${expectedPos}, but ${expectedPos} should act first. Is the action order correct, or is there a transcription error?`
+              });
+            }
             break; // one order error per street is enough to flag it
           }
         }
@@ -463,27 +473,31 @@ const HoldemValidator = (() => {
         continue;
       }
 
-      // Seat range
+      // Seat range — suppress in tolerant mode for inferred actions
       if (!seat || seat < 1 || seat > seatCount) {
-        errors.push({
-          severity: "error",
-          field: `${street}.actions[${i}].seat`,
-          message: `Invalid seat number: ${seat === null || seat === undefined ? "unknown" : seat}`,
-          question: seat === null || seat === undefined
-            ? `Hand ${hid}, ${street}: A player's seat is unknown (${actions[i].position || "unknown position"} ${actions[i].action}s). Which seat (1-${seatCount})?`
-            : `Hand ${hid}, ${street}: Seat ${seat} is invalid. Seats must be 1-${seatCount}.`
-        });
+        if (!tolerant || !action._inferred) {
+          errors.push({
+            severity: "error",
+            field: `${street}.actions[${i}].seat`,
+            message: `Invalid seat number: ${seat === null || seat === undefined ? "unknown" : seat}`,
+            question: seat === null || seat === undefined
+              ? `Hand ${hid}, ${street}: A player's seat is unknown (${actions[i].position || "unknown position"} ${actions[i].action}s). Which seat (1-${seatCount})?`
+              : `Hand ${hid}, ${street}: Seat ${seat} is invalid. Seats must be 1-${seatCount}.`
+          });
+        }
         continue;
       }
 
-      // Can't act if folded
+      // Can't act if folded — in tolerant mode, silently skip the action
       if (foldedSeats.has(seat)) {
-        errors.push({
-          severity: "error",
-          field: `${street}.actions[${i}]`,
-          message: `Seat ${seat} already folded but is acting again`,
-          question: `Hand ${hid}, ${street}: Seat ${seat} folded earlier but acts again. Is the action sequence correct?`
-        });
+        if (!tolerant) {
+          errors.push({
+            severity: "error",
+            field: `${street}.actions[${i}]`,
+            message: `Seat ${seat} already folded but is acting again`,
+            question: `Hand ${hid}, ${street}: Seat ${seat} folded earlier but acts again. Is the action sequence correct?`
+          });
+        }
         continue;
       }
 
@@ -502,8 +516,7 @@ const HoldemValidator = (() => {
 
       if (act === "check") {
         // Can only check if no bet to face (or if BB preflop with no raise)
-        if (currentBet > 0 && committed < currentBet) {
-          // Exception: BB can check if no raise preflop
+        if (!tolerant && currentBet > 0 && committed < currentBet) {
           const isBBOption = street === "preflop" && committed >= bigBlind && currentBet <= bigBlind;
           if (!isBBOption) {
             errors.push({
@@ -517,7 +530,7 @@ const HoldemValidator = (() => {
       }
 
       if (act === "call") {
-        if (currentBet <= 0 && street !== "preflop") {
+        if (!tolerant && currentBet <= 0 && street !== "preflop") {
           errors.push({
             severity: "warning",
             field: `${street}.actions[${i}]`,
@@ -529,14 +542,19 @@ const HoldemValidator = (() => {
 
       if (act === "bet") {
         if (currentBet > 0) {
-          errors.push({
-            severity: "error",
-            field: `${street}.actions[${i}]`,
-            message: `Seat ${seat} bets but there's already a bet of ${currentBet}. Should be "raise"`,
-            question: `Hand ${hid}, ${street}: Seat ${seat} bets but there's already a bet. Did you mean raise to ${amount}?`
-          });
+          if (tolerant) {
+            // Auto-fix: treat as raise instead of generating a question
+            action.action = "raise";
+          } else {
+            errors.push({
+              severity: "error",
+              field: `${street}.actions[${i}]`,
+              message: `Seat ${seat} bets but there's already a bet of ${currentBet}. Should be "raise"`,
+              question: `Hand ${hid}, ${street}: Seat ${seat} bets but there's already a bet. Did you mean raise to ${amount}?`
+            });
+          }
         }
-        if (amount > 0 && amount < bigBlind && street !== "preflop") {
+        if (!tolerant && amount > 0 && amount < bigBlind && street !== "preflop") {
           errors.push({
             severity: "warning",
             field: `${street}.actions[${i}]`,
@@ -553,14 +571,19 @@ const HoldemValidator = (() => {
 
       if (act === "raise") {
         if (currentBet <= 0 && street !== "preflop") {
-          errors.push({
-            severity: "warning",
-            field: `${street}.actions[${i}]`,
-            message: `Seat ${seat} raises but there's no bet to raise. Should be "bet"`,
-            question: `Hand ${hid}, ${street}: Seat ${seat} raises but no one bet first. Did you mean bet ${amount}?`
-          });
+          if (tolerant) {
+            // Auto-fix: treat as bet
+            action.action = "bet";
+          } else {
+            errors.push({
+              severity: "warning",
+              field: `${street}.actions[${i}]`,
+              message: `Seat ${seat} raises but there's no bet to raise. Should be "bet"`,
+              question: `Hand ${hid}, ${street}: Seat ${seat} raises but no one bet first. Did you mean bet ${amount}?`
+            });
+          }
         }
-        if (amount > 0 && amount <= currentBet) {
+        if (!tolerant && amount > 0 && amount <= currentBet) {
           errors.push({
             severity: "error",
             field: `${street}.actions[${i}]`,
@@ -568,16 +591,17 @@ const HoldemValidator = (() => {
             question: `Hand ${hid}, ${street}: Raise to ${amount} isn't more than the current bet of ${currentBet}. What was the raise amount?`
           });
         }
-        // Minimum raise check
-        const minRaise = currentBet * 2;
-        if (amount > 0 && amount < minRaise && amount !== committed + (hand.stacks || {})[seat]) {
-          // Only warn — could be an all-in that's below min raise
-          errors.push({
-            severity: "warning",
-            field: `${street}.actions[${i}]`,
-            message: `Raise to ${amount} may be below minimum raise (${minRaise})`,
-            question: `Hand ${hid}, ${street}: Raise to ${amount} — min raise is typically ${minRaise}. Was this an all-in or is the amount correct?`
-          });
+        // Minimum raise check — suppress in tolerant mode
+        if (!tolerant) {
+          const minRaise = currentBet * 2;
+          if (amount > 0 && amount < minRaise && amount !== committed + (hand.stacks || {})[seat]) {
+            errors.push({
+              severity: "warning",
+              field: `${street}.actions[${i}]`,
+              message: `Raise to ${amount} may be below minimum raise (${minRaise})`,
+              question: `Hand ${hid}, ${street}: Raise to ${amount} — min raise is typically ${minRaise}. Was this an all-in or is the amount correct?`
+            });
+          }
         }
         if (amount > 0) {
           currentBet = amount;
@@ -606,9 +630,8 @@ const HoldemValidator = (() => {
     }
 
     // After processing all actions: check that the hand didn't continue with only 1 player
-    // (all others folded)
     const activePlayers = seatCount - foldedSeats.size;
-    if (activePlayers < 1) {
+    if (!tolerant && activePlayers < 1) {
       errors.push({
         severity: "error",
         field: `${street}.actions`,
@@ -627,7 +650,9 @@ const HoldemValidator = (() => {
    * @param {Object} sessionData
    * @returns {Array<{hand_id, severity, field, message, question}>}
    */
-  function validateSession(sessionData) {
+  function validateSession(sessionData, opts) {
+    const o = opts || {};
+    const tolerant = !!o.tolerant; // strict by default, opt-in to tolerant
     const allErrors = [];
     const seatCount = 9;
 
@@ -645,7 +670,7 @@ const HoldemValidator = (() => {
 
     // Validate each hand
     for (const hand of (sessionData.hands || [])) {
-      const handErrors = validateHand(hand, seatCount);
+      const handErrors = validateHand(hand, seatCount, { tolerant });
       handErrors.forEach((err) => {
         allErrors.push({
           hand_id: hand.hand_id || "?",
@@ -795,9 +820,17 @@ const HoldemValidator = (() => {
     const buttonSeat = hand.button_seat;
     if (!buttonSeat) return inferred;
 
+    const bigBlind = (hand.blinds || {}).big || 5;
+
     // Track folds and all-ins across streets
     const globalFolded = new Set();
     const globalAllIn = new Set();
+
+    // ---- Phase 0: Resolve seat 0 / unknown actors ----
+    _resolveUnknownSeats(hand, seatCount, buttonSeat, inferred);
+
+    // ---- Phase 0b: Estimate missing bet/raise amounts ----
+    _estimateMissingAmounts(hand, seatCount, bigBlind, inferred);
 
     for (const streetBlock of (hand.action_sequence || [])) {
       const street = streetBlock.street;
@@ -807,18 +840,15 @@ const HoldemValidator = (() => {
       if (street !== "preflop") {
         // Determine active seats (not folded, not all-in) at the start of this street
         const activeSeats = new Set();
-        // Collect all seats that participate in this hand (appeared in any action)
         for (const sb of (hand.action_sequence || [])) {
           for (const a of (sb.actions || [])) {
             if (a.seat >= 1 && a.seat <= seatCount) activeSeats.add(a.seat);
           }
         }
-        // Remove folded and all-in players
         for (const s of globalFolded) activeSeats.delete(s);
         for (const s of globalAllIn) activeSeats.delete(s);
 
         if (activeSeats.size > 1) {
-          // Build expected postflop order
           const sbSeat = ((buttonSeat - 1 + 1) % seatCount) + 1;
           const order = [];
           for (let i = 0; i < seatCount; i++) {
@@ -826,7 +856,6 @@ const HoldemValidator = (() => {
             if (activeSeats.has(seat)) order.push(seat);
           }
 
-          // Find the first recorded action's seat
           const firstActionSeat = actions[0].seat;
           const firstActionIdx = order.indexOf(firstActionSeat);
           const firstAction = (actions[0].action || "").toLowerCase();
@@ -837,23 +866,21 @@ const HoldemValidator = (() => {
             const checksToInsert = [];
             for (let i = 0; i < firstActionIdx; i++) {
               const seat = order[i];
-              // Find this seat's position label from any action in the hand
-              let position = "?";
+              let position = _positionLabel(seat, buttonSeat, seatCount);
               for (const sb of (hand.action_sequence || [])) {
                 const found = (sb.actions || []).find(a => a.seat === seat);
-                if (found && found.position) { position = found.position; break; }
+                if (found && found.position && found.position !== "?") { position = found.position; break; }
               }
-              checksToInsert.push({
-                seat,
-                position,
-                action: "check",
-                _inferred: true
-              });
+              checksToInsert.push({ seat, position, action: "check", _inferred: true });
               inferred.push({ street, seat, position, action: "check" });
             }
-            // Insert at the beginning
             streetBlock.actions = [...checksToInsert, ...actions];
           }
+
+          // ---- Postflop fold inference ----
+          // If a bet/raise happened and the hand moves to the next street (or ends),
+          // anyone who didn't call/raise/go all-in must have folded
+          _inferPostflopFolds(streetBlock, hand, order, globalFolded, globalAllIn, buttonSeat, seatCount, inferred);
         }
       }
 
@@ -862,22 +889,19 @@ const HoldemValidator = (() => {
         const sbSeat = ((buttonSeat - 1 + 1) % seatCount) + 1;
         const bbSeat2 = ((buttonSeat - 1 + 2) % seatCount) + 1;
 
-        // Build full preflop order (UTG first, BB last) for all possible seats
+        // Build full preflop order for ALL 9 seats (assume full table)
         const allSeats = new Set();
+        for (let s = 1; s <= seatCount; s++) allSeats.add(s);
+        // Also add any seats referenced in actions
         for (const sb of (hand.action_sequence || [])) {
           for (const a of (sb.actions || [])) {
             if (a.seat >= 1 && a.seat <= seatCount) allSeats.add(a.seat);
           }
         }
-        // Also include hero and stacks seats
         if (hand.hero_seat) allSeats.add(hand.hero_seat);
-        for (const s of Object.keys(hand.stacks || {})) {
-          const sn = parseInt(s, 10);
-          if (sn >= 1 && sn <= seatCount) allSeats.add(sn);
-        }
 
         const preflopOrder = buildExpectedOrder(buttonSeat, seatCount, "preflop", allSeats);
-        const explicitSeats = new Set(actions.map(a => a.seat));
+        const explicitSeats = new Set(actions.filter(a => a.seat >= 1).map(a => a.seat));
 
         // Find the first voluntary action (not an inferred action)
         const firstVoluntaryIdx = actions.findIndex(a => !a._inferred);
@@ -886,13 +910,12 @@ const HoldemValidator = (() => {
           const firstPosIdx = preflopOrder.indexOf(firstActionSeat);
 
           if (firstPosIdx > 0) {
-            // Insert folds for all seats before the first actor that have no explicit action
             const foldsToInsert = [];
             for (let i = 0; i < firstPosIdx; i++) {
               const seat = preflopOrder[i];
-              if (seat === sbSeat || seat === bbSeat2) continue; // SB/BB act later
-              if (explicitSeats.has(seat)) continue; // already has an action
-              if (globalFolded.has(seat)) continue; // already folded in prior logic
+              if (seat === sbSeat || seat === bbSeat2) continue;
+              if (explicitSeats.has(seat)) continue;
+              if (globalFolded.has(seat)) continue;
 
               const position = _positionLabel(seat, buttonSeat, seatCount);
               foldsToInsert.push({ seat, position, action: "fold", _inferred: true });
@@ -901,24 +924,21 @@ const HoldemValidator = (() => {
             }
             if (foldsToInsert.length > 0) {
               streetBlock.actions = [...foldsToInsert, ...actions];
-              // Refresh actions reference
               actions = streetBlock.actions;
             }
           }
 
-          // Second pass: handle mid-sequence gaps (e.g., UTG folds, [missing UTG+1], UTG+2 raises)
-          const updatedExplicit = new Set(actions.map(a => a.seat));
-          const insertions = []; // {beforeIndex, foldAction}
+          // Second pass: handle mid-sequence gaps
+          const updatedExplicit = new Set(actions.filter(a => a.seat >= 1).map(a => a.seat));
+          const insertions = [];
           for (let oi = 0; oi < preflopOrder.length; oi++) {
             const seat = preflopOrder[oi];
             if (seat === sbSeat || seat === bbSeat2) continue;
             if (updatedExplicit.has(seat)) continue;
             if (globalFolded.has(seat)) continue;
-            // Check if any later seat in the order has an action
             const laterActed = preflopOrder.slice(oi + 1).some(ls => updatedExplicit.has(ls) && ls !== sbSeat && ls !== bbSeat2);
             if (laterActed) {
               const position = _positionLabel(seat, buttonSeat, seatCount);
-              // Find where to insert: before the first action from a later-order seat
               let insertIdx = actions.length;
               for (let ai = 0; ai < actions.length; ai++) {
                 const aiOrderIdx = preflopOrder.indexOf(actions[ai].seat);
@@ -930,13 +950,41 @@ const HoldemValidator = (() => {
               });
               inferred.push({ street: "preflop", seat, position, action: "fold" });
               globalFolded.add(seat);
-              updatedExplicit.add(seat); // prevent re-processing
+              updatedExplicit.add(seat);
             }
           }
-          // Apply insertions in reverse order so indices don't shift
           insertions.sort((a, b) => b.idx - a.idx);
           for (const ins of insertions) {
             streetBlock.actions.splice(ins.idx, 0, ins.action);
+          }
+
+          // Third pass: if the last explicit preflop action is a raise/bet and hand goes
+          // to flop, any seats after that action (up to and including BTN, SB who haven't
+          // acted) must have folded — EXCEPT callers. This handles "HJ raises" with no
+          // further action recorded.
+          actions = streetBlock.actions; // refresh
+          const lastExplicit = [...actions].reverse().find(a => !a._inferred);
+          if (lastExplicit && (lastExplicit.action === "raise" || lastExplicit.action === "bet")) {
+            const hasPostflop = (hand.action_sequence || []).some(sb => sb.street !== "preflop" && (sb.actions || []).length > 0);
+            if (hasPostflop) {
+              // Everyone who hasn't acted after the raiser and isn't a known caller = fold
+              const actedSeats = new Set(actions.map(a => a.seat));
+              const raiserIdx = preflopOrder.indexOf(lastExplicit.seat);
+              const endFolds = [];
+              for (let oi = raiserIdx + 1; oi < preflopOrder.length; oi++) {
+                const seat = preflopOrder[oi];
+                if (actedSeats.has(seat)) continue;
+                if (globalFolded.has(seat)) continue;
+                const position = _positionLabel(seat, buttonSeat, seatCount);
+                endFolds.push({ seat, position, action: "fold", _inferred: true });
+                inferred.push({ street: "preflop", seat, position, action: "fold" });
+                globalFolded.add(seat);
+              }
+              if (endFolds.length > 0) {
+                streetBlock.actions = [...actions, ...endFolds];
+                actions = streetBlock.actions;
+              }
+            }
           }
         }
       }
@@ -944,8 +992,6 @@ const HoldemValidator = (() => {
       // Preflop: check if BB option should be inferred
       if (street === "preflop") {
         const bbSeat = ((buttonSeat - 1 + 2) % seatCount) + 1;
-        const bigBlind = (hand.blinds || {}).big || 5;
-        // Check if action reaches BB with no raise above BB
         let maxBet = bigBlind;
         let bbActed = false;
         for (const a of actions) {
@@ -954,8 +1000,6 @@ const HoldemValidator = (() => {
           if ((a.action === "raise" || a.action === "all-in") && amt > maxBet) maxBet = amt;
         }
 
-        // If everyone limped/folded to BB and BB never explicitly acted,
-        // and the hand continues to a flop, BB checked (option)
         if (!bbActed && maxBet <= bigBlind && !globalFolded.has(bbSeat)) {
           const hasPostflop = (hand.action_sequence || []).some(sb => sb.street !== "preflop");
           if (hasPostflop) {
@@ -981,6 +1025,171 @@ const HoldemValidator = (() => {
     }
 
     return inferred;
+  }
+
+  // ---- Seat 0 / Unknown Actor Resolution ----
+
+  function _resolveUnknownSeats(hand, seatCount, buttonSeat, inferred) {
+    // Collect known seat assignments
+    const knownSeats = new Set();
+    for (const sb of (hand.action_sequence || [])) {
+      for (const a of (sb.actions || [])) {
+        if (a.seat >= 1 && a.seat <= seatCount) knownSeats.add(a.seat);
+      }
+    }
+    if (hand.hero_seat) knownSeats.add(hand.hero_seat);
+
+    // Track active (non-folded) seats for assignment
+    const foldedSeats = new Set();
+
+    for (const streetBlock of (hand.action_sequence || [])) {
+      const activeSeats = new Set();
+      for (let s = 1; s <= seatCount; s++) {
+        if (!foldedSeats.has(s)) activeSeats.add(s);
+      }
+
+      // Build expected order for this street
+      const order = buildExpectedOrder(buttonSeat, seatCount, streetBlock.street, activeSeats);
+      let orderIdx = 0;
+
+      for (const action of (streetBlock.actions || [])) {
+        if (action.seat === 0 || !action.seat || action.position === "?") {
+          // Assign to next available seat in expected order
+          while (orderIdx < order.length && knownSeats.has(order[orderIdx])) {
+            orderIdx++;
+          }
+          if (orderIdx < order.length) {
+            action.seat = order[orderIdx];
+            action.position = _positionLabel(order[orderIdx], buttonSeat, seatCount);
+            action._inferred = true;
+            inferred.push({
+              street: streetBlock.street,
+              seat: action.seat,
+              position: action.position,
+              action: action.action,
+              note: "seat resolved by elimination"
+            });
+            orderIdx++;
+          }
+        }
+
+        if (action.action === "fold") foldedSeats.add(action.seat);
+      }
+    }
+  }
+
+  // ---- Missing Amount Estimation ----
+
+  function _estimateMissingAmounts(hand, seatCount, bigBlind, inferred) {
+    let pot = bigBlind + Math.floor(bigBlind / 2); // SB + BB
+    let currentBet = bigBlind;
+    let lastRaiseSize = bigBlind;
+    let isPreflop = true;
+
+    for (const streetBlock of (hand.action_sequence || [])) {
+      if (streetBlock.street !== "preflop") {
+        isPreflop = false;
+        currentBet = 0;
+        lastRaiseSize = 0;
+      }
+
+      for (const action of (streetBlock.actions || [])) {
+        const act = action.action;
+
+        if (act === "call" && !action.amount && currentBet > 0) {
+          action.amount = currentBet;
+          action._estimated = true;
+          inferred.push({ street: streetBlock.street, action: "call", amount: currentBet, note: "call amount inferred from bet" });
+        }
+
+        if (act === "bet" && !action.amount) {
+          // Estimate: 60% pot postflop, 2.5x BB preflop
+          const estimate = isPreflop
+            ? Math.round(bigBlind * 2.5 / 5) * 5
+            : Math.round(pot * 0.6 / 5) * 5 || bigBlind;
+          action.amount = Math.max(estimate, bigBlind);
+          action._estimated = true;
+          inferred.push({ street: streetBlock.street, action: "bet", amount: action.amount, note: "estimated bet amount" });
+        }
+
+        if (act === "raise" && !action.amount) {
+          // Estimate: 3x last bet preflop, 2.5x postflop
+          const estimate = isPreflop
+            ? Math.round(currentBet * 3 / 5) * 5
+            : Math.round(currentBet * 2.5 / 5) * 5 || Math.round(pot * 0.6 / 5) * 5;
+          action.amount = Math.max(estimate, currentBet * 2);
+          action._estimated = true;
+          inferred.push({ street: streetBlock.street, action: "raise", amount: action.amount, note: "estimated raise amount" });
+        }
+
+        // Update pot and bet tracking
+        if (act === "call") {
+          pot += (action.amount || currentBet);
+        } else if (act === "bet" || act === "raise") {
+          const amt = action.amount || 0;
+          if (amt > currentBet) {
+            lastRaiseSize = amt - currentBet;
+            currentBet = amt;
+          }
+          pot += amt;
+        } else if (act === "all-in") {
+          pot += (action.amount || 0);
+          if ((action.amount || 0) > currentBet) currentBet = action.amount;
+        }
+      }
+    }
+  }
+
+  // ---- Postflop Fold Inference ----
+
+  function _inferPostflopFolds(streetBlock, hand, activeOrder, globalFolded, globalAllIn, buttonSeat, seatCount, inferred) {
+    const actions = streetBlock.actions || [];
+    const street = streetBlock.street;
+
+    // Find the last aggressive action (bet/raise/all-in) on this street
+    let lastAggressiveIdx = -1;
+    for (let i = actions.length - 1; i >= 0; i--) {
+      const act = actions[i].action;
+      if (act === "bet" || act === "raise" || act === "all-in") {
+        lastAggressiveIdx = i;
+        break;
+      }
+    }
+    if (lastAggressiveIdx < 0) return; // no aggression, no folds to infer
+
+    // Only infer folds if there's a NEXT street with actions (confirming this street completed)
+    // Without a next street, we can't know if players called or folded
+    const streetOrder = ["preflop", "flop", "turn", "river"];
+    const streetIdx = streetOrder.indexOf(street);
+    const nextStreetExists = (hand.action_sequence || []).some(
+      sb => streetOrder.indexOf(sb.street) > streetIdx && (sb.actions || []).length > 0
+    );
+
+    if (!nextStreetExists) return; // can't infer without next street evidence
+
+    // Collect seats that explicitly acted after the last aggressive action
+    const actedAfterAggression = new Set();
+    actedAfterAggression.add(actions[lastAggressiveIdx].seat); // the aggressor
+    for (let i = lastAggressiveIdx + 1; i < actions.length; i++) {
+      actedAfterAggression.add(actions[i].seat);
+    }
+
+    // Any active seat that DIDN'T act after the aggression must have folded
+    // (unless they were already folded or all-in)
+    const foldsToAppend = [];
+    for (const seat of activeOrder) {
+      if (globalFolded.has(seat)) continue;
+      if (globalAllIn.has(seat)) continue;
+      if (actedAfterAggression.has(seat)) continue;
+      // This seat didn't respond to the bet/raise — they folded
+      const position = _positionLabel(seat, buttonSeat, seatCount);
+      foldsToAppend.push({ seat, position, action: "fold", _inferred: true });
+      inferred.push({ street, seat, position, action: "fold" });
+      globalFolded.add(seat);
+    }
+    if (foldsToAppend.length > 0) {
+      streetBlock.actions = [...actions, ...foldsToAppend];
+    }
   }
 
   return {

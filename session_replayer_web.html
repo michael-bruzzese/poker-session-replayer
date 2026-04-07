@@ -1602,6 +1602,7 @@
 <script src="shared/card_utils.js"></script>
 <script src="shared/table_engine.js"></script>
 <script src="shared/holdem_validator.js"></script>
+<script src="shared/tabular_parser.js"></script>
 <script src="shared/shorthand_learner.js"></script>
 <script src="shared/session_storage.js"></script>
 <script src="shared/llm_adapter.js"></script>
@@ -3313,7 +3314,7 @@
     const questions = [];
     for (const hand of (sessionData.hands || [])) {
       const hid = hand.hand_id || "?";
-      // Missing hero cards
+      // Missing hero cards — always blocking, can't be inferred
       if (!hand.hero_cards || hand.hero_cards.length < 2) {
         questions.push({
           hand_id: hid, field: "hero_cards", severity: "blocking",
@@ -3321,34 +3322,39 @@
           context: ""
         });
       }
-      // Missing board cards with later street actions
+      // Missing board cards — downgrade to warning (playable with Xx blanks)
       const streetsWithActions = new Set((hand.action_sequence || []).filter(s => s.actions && s.actions.length).map(s => s.street));
       const board = hand.board || {};
       if (streetsWithActions.has("flop") && (!board.flop || board.flop.length < 3)) {
+        // Auto-fill with blank cards instead of blocking
+        if (!board.flop) hand.board.flop = ["Xx", "Xx", "Xx"];
+        else while (hand.board.flop.length < 3) hand.board.flop.push("Xx");
         questions.push({
-          hand_id: hid, field: "board.flop", severity: "blocking",
-          question: `Hand ${hid}: Flop action exists but no flop cards. What was the flop?`,
+          hand_id: hid, field: "board.flop", severity: "warning",
+          question: `Hand ${hid}: Flop cards unknown — filled with blanks. What was the flop?`,
           context: `Hero: ${(hand.hero_cards || []).join(" ")}`
         });
       }
       if (streetsWithActions.has("turn") && !board.turn) {
+        hand.board.turn = "Xx";
         questions.push({
-          hand_id: hid, field: "board.turn", severity: "blocking",
-          question: `Hand ${hid}: Turn action exists but no turn card. What was the turn?`,
+          hand_id: hid, field: "board.turn", severity: "warning",
+          question: `Hand ${hid}: Turn card unknown — filled with blank. What was the turn?`,
           context: `Flop: ${(board.flop || []).join(" ")}`
         });
       }
       if (streetsWithActions.has("river") && !board.river) {
+        hand.board.river = "Xx";
         questions.push({
-          hand_id: hid, field: "board.river", severity: "blocking",
-          question: `Hand ${hid}: River action exists but no river card. What was the river?`,
+          hand_id: hid, field: "board.river", severity: "warning",
+          question: `Hand ${hid}: River card unknown — filled with blank. What was the river?`,
           context: `Board: ${(board.flop || []).join(" ")} ${board.turn || ""}`
         });
       }
-      // Bets/raises without amounts
+      // Bets/raises without amounts — skip if already estimated
       for (const streetBlock of (hand.action_sequence || [])) {
         for (const action of (streetBlock.actions || [])) {
-          if ((action.action === "bet" || action.action === "raise") && !action.amount) {
+          if ((action.action === "bet" || action.action === "raise") && !action.amount && !action._estimated) {
             questions.push({
               hand_id: hid, field: `${streetBlock.street}.amount`,
               severity: "warning",
@@ -3367,17 +3373,18 @@
 
     // Run implicit action inference before validation
     const HV = window.HoldemValidator;
+    let totalInferred = 0;
     if (HV && HV.inferImpliedActions) {
       for (const hand of (sessionData.hands || [])) {
-        HV.inferImpliedActions(hand, SEAT_COUNT);
+        const inferred = HV.inferImpliedActions(hand, SEAT_COUNT);
+        totalInferred += inferred.length;
       }
     }
 
-    // Run Hold'em rules validation
+    // Run Hold'em rules validation in tolerant mode
     let questions = [];
     if (HV) {
-      const violations = HV.validateSession(sessionData);
-      // Convert violations to Q&A questions (only errors and blocking warnings)
+      const violations = HV.validateSession(sessionData, { tolerant: true });
       violations.forEach((v) => {
         questions.push({
           hand_id: v.hand_id,
@@ -3391,7 +3398,6 @@
 
     // Also run basic ambiguity detection
     const ambiguities = detectAmbiguities(sessionData);
-    // Merge, avoiding duplicates by field+hand_id
     const seen = new Set(questions.map(q => `${q.hand_id}:${q.field}`));
     ambiguities.forEach((a) => {
       const key = `${a.hand_id}:${a.field}`;
@@ -3408,12 +3414,37 @@
       return (a.hand_id || 0) - (b.hand_id || 0);
     });
 
+    // Count estimated amounts for summary
+    let estimatedCount = 0;
+    for (const hand of (sessionData.hands || [])) {
+      for (const sb of (hand.action_sequence || [])) {
+        for (const a of (sb.actions || [])) {
+          if (a._estimated) estimatedCount++;
+        }
+      }
+    }
+
+    const blocking = questions.filter(q => q.severity === "blocking").length;
+    const handCount = (sessionData.hands || []).length;
+
+    // Build inference summary
+    const summaryParts = [`Parsed ${handCount} hands`];
+    if (totalInferred > 0) summaryParts.push(`inferred ${totalInferred} actions`);
+    if (estimatedCount > 0) summaryParts.push(`estimated ${estimatedCount} amounts`);
+
     qaState.questions = questions;
     qaState.currentIdx = 0;
 
-    if (questions.length === 0) {
+    // Skip Q&A if no blocking questions
+    if (blocking === 0) {
+      els.parseStatus.textContent = summaryParts.join(", ") + ". No issues — loading session...";
       openReview(sessionData);
       return;
+    }
+
+    // Show summary on Q&A screen
+    if (questions.length > 0) {
+      els.parseStatus.textContent = summaryParts.join(", ") + `. ${blocking} issue(s) to resolve.`;
     }
 
     showScreen("qa");
@@ -4075,13 +4106,31 @@
       tryShorthandParse(text, applyParseScreenMeta);
 
       function tryShorthandParse(noteText, metaFn) {
+        // Parse blinds and hero seat from UI inputs
+        const blindsVal = els.parseBlinds.value.trim();
+        const blindsParts = blindsVal.split("/");
+        const blinds = blindsParts.length === 2
+          ? { small: parseInt(blindsParts[0]) || 2, big: parseInt(blindsParts[1]) || 5 }
+          : (session.blinds || { small: 2, big: 5 });
+        const heroSeat = parseInt(els.parseHeroSeat.value) || 1;
+
+        // Try tabular parser first (deterministic, no LLM, handles structured notes)
+        const TP = window.TabularParser;
+        if (TP && TP.isTabularFormat(noteText)) {
+          els.parseStatus.textContent = "Detected tabular session format — parsing locally...";
+          const result = TP.parse(noteText, { blinds, heroSeat, sessionName: els.parseSessionName.value.trim() || "Session" });
+          if (result && result.hands && result.hands.length > 0) {
+            els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from tabular notes. Loading...`;
+            startQA(metaFn(result));
+            return;
+          }
+        }
+
+        // Fall back to shorthand learner
         els.parseStatus.textContent = "Detected session notes — parsing...";
         const SL = window.ShorthandLearner;
         if (SL) {
-          const result = SL.parseWithProfile(noteText, "default", {
-            blinds: session.blinds || { small: 2, big: 5 },
-            heroSeat: 1
-          });
+          const result = SL.parseWithProfile(noteText, "default", { blinds, heroSeat });
           if (result.hands && result.hands.length > 0) {
             els.parseStatus.textContent = `Parsed ${result.hands.length} hand(s) from session notes. Loading...`;
             startQA(metaFn(result));

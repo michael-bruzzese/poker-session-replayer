@@ -20,6 +20,7 @@ SHARED_FILES = [
     "card_utils.js",
     "table_engine.js",
     "holdem_validator.js",
+    "tabular_parser.js",
     "shorthand_learner.js",
     "session_storage.js",
     "llm_adapter.js",
