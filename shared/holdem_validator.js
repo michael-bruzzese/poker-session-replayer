@@ -772,11 +772,23 @@ const HoldemValidator = (() => {
    * Mutates the hand object in place. Returns a list of inferred actions for logging.
    *
    * Rules:
-   * 1. Postflop: if a street's first action is a bet/raise but there are active players
+   * 1. Preflop: if the first voluntary action is from a late position, insert folds for all
+   *    earlier positions (excluding SB/BB who act later). Also fills mid-sequence gaps.
+   * 2. Postflop: if a street's first action is a bet/raise but there are active players
    *    who should have acted before the bettor (based on button_seat), insert checks for them.
-   * 2. Preflop BB option: if action reaches BB with no raise beyond the big blind,
+   * 3. Preflop BB option: if action reaches BB with no raise beyond the big blind,
    *    and BB doesn't have an explicit action, insert a check (BB exercises option).
    */
+
+  /** Map a seat number to its position label given the button seat. */
+  function _positionLabel(seat, buttonSeat, seatCount) {
+    const positions9 = ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO"];
+    const positions6 = ["BTN", "SB", "BB", "UTG", "HJ", "CO"];
+    const positions = seatCount <= 6 ? positions6 : positions9;
+    const idx = ((seat - buttonSeat + seatCount) % seatCount);
+    return positions[idx] || "S" + seat;
+  }
+
   function inferImpliedActions(hand, seatCount) {
     seatCount = seatCount || 9;
     const inferred = [];
@@ -789,7 +801,7 @@ const HoldemValidator = (() => {
 
     for (const streetBlock of (hand.action_sequence || [])) {
       const street = streetBlock.street;
-      const actions = streetBlock.actions || [];
+      let actions = streetBlock.actions || [];
       if (!actions.length) continue;
 
       if (street !== "preflop") {
@@ -841,6 +853,90 @@ const HoldemValidator = (() => {
             }
             // Insert at the beginning
             streetBlock.actions = [...checksToInsert, ...actions];
+          }
+        }
+      }
+
+      // Preflop: infer missing folds for seats that should have acted
+      if (street === "preflop") {
+        const sbSeat = ((buttonSeat - 1 + 1) % seatCount) + 1;
+        const bbSeat2 = ((buttonSeat - 1 + 2) % seatCount) + 1;
+
+        // Build full preflop order (UTG first, BB last) for all possible seats
+        const allSeats = new Set();
+        for (const sb of (hand.action_sequence || [])) {
+          for (const a of (sb.actions || [])) {
+            if (a.seat >= 1 && a.seat <= seatCount) allSeats.add(a.seat);
+          }
+        }
+        // Also include hero and stacks seats
+        if (hand.hero_seat) allSeats.add(hand.hero_seat);
+        for (const s of Object.keys(hand.stacks || {})) {
+          const sn = parseInt(s, 10);
+          if (sn >= 1 && sn <= seatCount) allSeats.add(sn);
+        }
+
+        const preflopOrder = buildExpectedOrder(buttonSeat, seatCount, "preflop", allSeats);
+        const explicitSeats = new Set(actions.map(a => a.seat));
+
+        // Find the first voluntary action (not an inferred action)
+        const firstVoluntaryIdx = actions.findIndex(a => !a._inferred);
+        if (firstVoluntaryIdx >= 0) {
+          const firstActionSeat = actions[firstVoluntaryIdx].seat;
+          const firstPosIdx = preflopOrder.indexOf(firstActionSeat);
+
+          if (firstPosIdx > 0) {
+            // Insert folds for all seats before the first actor that have no explicit action
+            const foldsToInsert = [];
+            for (let i = 0; i < firstPosIdx; i++) {
+              const seat = preflopOrder[i];
+              if (seat === sbSeat || seat === bbSeat2) continue; // SB/BB act later
+              if (explicitSeats.has(seat)) continue; // already has an action
+              if (globalFolded.has(seat)) continue; // already folded in prior logic
+
+              const position = _positionLabel(seat, buttonSeat, seatCount);
+              foldsToInsert.push({ seat, position, action: "fold", _inferred: true });
+              inferred.push({ street: "preflop", seat, position, action: "fold" });
+              globalFolded.add(seat);
+            }
+            if (foldsToInsert.length > 0) {
+              streetBlock.actions = [...foldsToInsert, ...actions];
+              // Refresh actions reference
+              actions = streetBlock.actions;
+            }
+          }
+
+          // Second pass: handle mid-sequence gaps (e.g., UTG folds, [missing UTG+1], UTG+2 raises)
+          const updatedExplicit = new Set(actions.map(a => a.seat));
+          const insertions = []; // {beforeIndex, foldAction}
+          for (let oi = 0; oi < preflopOrder.length; oi++) {
+            const seat = preflopOrder[oi];
+            if (seat === sbSeat || seat === bbSeat2) continue;
+            if (updatedExplicit.has(seat)) continue;
+            if (globalFolded.has(seat)) continue;
+            // Check if any later seat in the order has an action
+            const laterActed = preflopOrder.slice(oi + 1).some(ls => updatedExplicit.has(ls) && ls !== sbSeat && ls !== bbSeat2);
+            if (laterActed) {
+              const position = _positionLabel(seat, buttonSeat, seatCount);
+              // Find where to insert: before the first action from a later-order seat
+              let insertIdx = actions.length;
+              for (let ai = 0; ai < actions.length; ai++) {
+                const aiOrderIdx = preflopOrder.indexOf(actions[ai].seat);
+                if (aiOrderIdx > oi) { insertIdx = ai; break; }
+              }
+              insertions.push({
+                idx: insertIdx,
+                action: { seat, position, action: "fold", _inferred: true }
+              });
+              inferred.push({ street: "preflop", seat, position, action: "fold" });
+              globalFolded.add(seat);
+              updatedExplicit.add(seat); // prevent re-processing
+            }
+          }
+          // Apply insertions in reverse order so indices don't shift
+          insertions.sort((a, b) => b.idx - a.idx);
+          for (const ins of insertions) {
+            streetBlock.actions.splice(ins.idx, 0, ins.action);
           }
         }
       }

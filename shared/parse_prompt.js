@@ -111,7 +111,7 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
    - If stack sizes aren't mentioned, use default of 100 big blinds per player
    - If the button position isn't explicit, infer from described positions
 
-7. **Preflop folds**: Include all fold actions explicitly. If "folds around to the button", that means all seats between UTG and the button fold. Include each as a separate fold action with the correct seat number.
+7. **Preflop folds**: Include ALL fold actions explicitly — even implied ones. If a player "opens in the cutoff", that means UTG, UTG+1, UTG+2, LJ, and HJ all folded before the CO acted. If "folds around to the button", all seats between UTG and the button fold. Include each fold as a separate action with the correct seat number. NEVER skip fold actions — the replayer needs every seat's action to animate correctly.
 
 8. **Result**: Determine the winner based on the action (last player standing after folds, or showdown winner if described).
 
@@ -125,6 +125,13 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
 11. **Player descriptions**: If the user describes players ("the tight guy in seat 3", "Dave is a LAG"), capture these in the players object.
 
+12. **Voice transcription tolerance**: If the input appears to be voice-transcribed (natural speech, run-on sentences, filler words), apply extra tolerance for misheard poker terms:
+   - Positions: "under the gun", "cut off"/"cutoff", "low jack"/"lojack", "high jack"/"hijack"
+   - Actions: "check raise"/"check race", "three bet"/"tree bet", "c-bet"/"continuation bet", "all in"/"all and"
+   - Cards: "ace"/"eight" (use context), "ten"/"tin", "deuce"/"juice"
+   - Suits: "spades"/"space", "hearts"/"arts", "clubs"/"cloves"
+   - Boundaries: "next hand", "new hand", "okay so" may mark hand transitions
+
 ## Important
 
 - Return ONLY the JSON object. No markdown code fences, no explanation text.
@@ -136,13 +143,21 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
   // ---- Context Message Builder ----
 
-  function buildUserMessage({ text, blinds, heroSeat, sessionName, knownPlayers, chunkIndex }) {
+  function buildUserMessage({ text, blinds, heroSeat, sessionName, knownPlayers, playerHints, chunkIndex, totalChunks, isVoiceInput }) {
     const parts = [];
-    if (chunkIndex && chunkIndex > 0) {
+    if (totalChunks && totalChunks > 1) {
+      parts.push(`[This is chunk ${(chunkIndex || 0) + 1} of ${totalChunks} from a single session. Maintain consistent seat numbering across all hands.]`);
+    } else if (chunkIndex && chunkIndex > 0) {
       parts.push(`[Continuing from previous chunk. Maintain consistent seat numbering.]`);
-      if (knownPlayers && Object.keys(knownPlayers).length > 0) {
-        parts.push(`[Known players from earlier: ${JSON.stringify(knownPlayers)}]`);
-      }
+    }
+    if (knownPlayers && Object.keys(knownPlayers).length > 0) {
+      parts.push(`[Known players: ${JSON.stringify(knownPlayers)}]`);
+    }
+    if (playerHints) {
+      parts.push(`[Player info from session: ${playerHints}]`);
+    }
+    if (isVoiceInput) {
+      parts.push(`[NOTE: This text was captured via voice recognition and may contain speech-to-text errors. Apply extra tolerance for misheard poker terms.]`);
     }
     if (sessionName) parts.push(`[Session name: ${sessionName}]`);
     if (blinds) parts.push(`[Session blinds: $${blinds.small}/$${blinds.big}]`);
@@ -150,6 +165,32 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
     const context = parts.length > 0 ? parts.join("\n") + "\n\n" : "";
     return context + text;
+  }
+
+  // ---- Player Hint Extraction (pre-scan for parallel parsing) ----
+
+  function extractPlayerHints(text) {
+    if (!text) return "";
+    const hints = [];
+    // "seat N is NAME" / "NAME in seat N"
+    const seatNamePattern = /\bseat\s*(\d)\s*(?:is|:)\s*([A-Za-z][A-Za-z\s]{1,20})/gi;
+    for (const m of text.matchAll(seatNamePattern)) {
+      hints.push(`Seat ${m[1]}: ${m[2].trim()}`);
+    }
+    // "the [adjective] guy/player" descriptions
+    const descPattern = /\b(the\s+(?:tight|loose|aggro|passive|old|young|big|quiet|loud|drunk|nitty|laggy|maniac)\s+(?:guy|player|man|woman|dude|kid|reg|fish))/gi;
+    for (const m of text.matchAll(descPattern)) {
+      if (!hints.includes(m[1])) hints.push(m[1]);
+    }
+    // Named players: "NAME opens" / "NAME raises" / "NAME calls"
+    const namedPattern = /\b([A-Z][a-z]{2,12})\s+(?:opens?|raises?|calls?|folds?|bets?|checks?|jams?|limps?|straddles?)\b/g;
+    for (const m of text.matchAll(namedPattern)) {
+      const name = m[1];
+      // Skip common false positives
+      if (["Hand", "Hero", "Seat", "Board", "Flop", "Turn", "River", "Pot", "Button"].includes(name)) continue;
+      if (!hints.some(h => h.includes(name))) hints.push(`Player: ${name}`);
+    }
+    return hints.join("; ");
   }
 
   // ---- Chunking ----
@@ -164,10 +205,28 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
     const handPattern = /(?=\bhand\s*#?\s*\d+\b)/gi;
     const matches = [...text.matchAll(handPattern)];
 
-    // If no hand boundaries found, fall back to double-newline
+    // If no "Hand N" boundaries found, try voice-friendly boundaries
     if (matches.length <= 1) {
+      const voicePattern = /(?=\b(?:next hand|new hand|new deal|okay so next|alright (?:so )?next|moving on to|okay hand|hand number)\b)/gi;
+      const voiceMatches = [...text.matchAll(voicePattern)];
+      if (voiceMatches.length > 1) {
+        const vSplitPoints = [0, ...voiceMatches.map(m => m.index).filter(i => i > 0)];
+        const vChunks = [];
+        for (let i = 0; i < vSplitPoints.length; i++) {
+          const start = vSplitPoints[i];
+          const end = i + 1 < vSplitPoints.length ? vSplitPoints[i + 1] : text.length;
+          vChunks.push(text.slice(start, end));
+        }
+        return mergeSmallChunks(vChunks, maxChars);
+      }
+
+      // Fall back to double-newline
       const nlChunks = text.split(/\n\s*\n/).filter(c => c.trim().length > 0);
-      return mergeSmallChunks(nlChunks, maxChars);
+      if (nlChunks.length > 1) return mergeSmallChunks(nlChunks, maxChars);
+
+      // Last resort: split at sentence boundaries for oversized single blocks
+      const sentenceChunks = text.split(/(?<=\.)\s+/).filter(c => c.trim().length > 0);
+      return mergeSmallChunks(sentenceChunks, maxChars);
     }
 
     // Split at hand boundaries
@@ -290,7 +349,8 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
     mergeParsedResults,
     isValidSessionShape,
     IMAGE_PARSE_PROMPT,
-    extractTranscription
+    extractTranscription,
+    extractPlayerHints
   };
 })();
 

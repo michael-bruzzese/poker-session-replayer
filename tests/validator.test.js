@@ -1812,3 +1812,156 @@ describe("Side Pot Calculation", () => {
     expect(ts.pots.reduce((s, p) => s + p.amount, 0)).toBe(90);
   });
 });
+
+// ============================================================
+// Implied Fold Inference
+// ============================================================
+
+describe("Implied Fold Inference — Preflop", () => {
+  /** Helper: build a minimal hand with preflop actions. Button=9, 9-max. */
+  function makeHand(preflopActions, opts) {
+    const o = opts || {};
+    return {
+      hand_id: 1,
+      button_seat: o.button || 9,
+      hero_seat: o.hero || 1,
+      blinds: { small: 1, big: 2 },
+      stacks: o.stacks || { 1: 500, 2: 500, 3: 500, 4: 500, 5: 500, 6: 500, 7: 500, 8: 500, 9: 500 },
+      hero_cards: ["Ah", "Kd"],
+      board: {},
+      action_sequence: [
+        { street: "preflop", actions: preflopActions }
+      ],
+      result: { winner_seat: 1, pot: 10, showdown: false }
+    };
+  }
+
+  // With button=9: SB=1, BB=2, UTG=3, UTG+1=4, UTG+2=5, LJ=6, HJ=7, CO=8, BTN=9
+
+  it("infers folds for UTG through HJ when CO opens", () => {
+    const hand = makeHand([
+      { seat: 8, position: "CO", action: "raise", amount: 6 },
+      { seat: 9, position: "BTN", action: "fold" },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "fold" }
+    ]);
+    const result = HoldemValidator.inferImpliedActions(hand, 9);
+    const folds = result.filter(r => r.action === "fold");
+    expect(folds.length).toBe(5); // UTG, UTG+1, UTG+2, LJ, HJ
+    expect(folds.map(f => f.seat).sort()).toEqual([3, 4, 5, 6, 7]);
+
+    // Verify they were inserted into the action sequence
+    const preflopActions = hand.action_sequence[0].actions;
+    expect(preflopActions[0].seat).toBe(3); // UTG fold first
+    expect(preflopActions[0]._inferred).toBe(true);
+    expect(preflopActions[4].seat).toBe(7); // HJ fold
+    expect(preflopActions[5].seat).toBe(8); // CO raise (original first action)
+  });
+
+  it("infers folds for all positions when BTN opens", () => {
+    const hand = makeHand([
+      { seat: 9, position: "BTN", action: "raise", amount: 6 },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "call", amount: 6 }
+    ]);
+    const result = HoldemValidator.inferImpliedActions(hand, 9);
+    const folds = result.filter(r => r.action === "fold");
+    expect(folds.length).toBe(6); // UTG through CO
+    expect(folds.map(f => f.seat).sort()).toEqual([3, 4, 5, 6, 7, 8]);
+  });
+
+  it("does NOT infer folds when UTG opens (no one before UTG)", () => {
+    const hand = makeHand([
+      { seat: 3, position: "UTG", action: "raise", amount: 6 },
+      { seat: 4, position: "UTG+1", action: "fold" },
+      { seat: 5, position: "UTG+2", action: "fold" },
+      { seat: 6, position: "LJ", action: "fold" },
+      { seat: 7, position: "HJ", action: "fold" },
+      { seat: 8, position: "CO", action: "fold" },
+      { seat: 9, position: "BTN", action: "fold" },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "fold" }
+    ]);
+    const result = HoldemValidator.inferImpliedActions(hand, 9);
+    const folds = result.filter(r => r.action === "fold");
+    expect(folds.length).toBe(0);
+  });
+
+  it("infers mid-sequence gap (UTG folds, missing UTG+1, UTG+2 raises)", () => {
+    const hand = makeHand([
+      { seat: 3, position: "UTG", action: "fold" },
+      // UTG+1 (seat 4) is missing
+      { seat: 5, position: "UTG+2", action: "raise", amount: 6 },
+      { seat: 6, position: "LJ", action: "fold" },
+      { seat: 7, position: "HJ", action: "fold" },
+      { seat: 8, position: "CO", action: "fold" },
+      { seat: 9, position: "BTN", action: "fold" },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "fold" }
+    ]);
+    const result = HoldemValidator.inferImpliedActions(hand, 9);
+    const folds = result.filter(r => r.action === "fold");
+    expect(folds.length).toBe(1);
+    expect(folds[0].seat).toBe(4); // UTG+1
+
+    // Verify insertion order
+    const actions = hand.action_sequence[0].actions;
+    const utg1Idx = actions.findIndex(a => a.seat === 4);
+    const utg2Idx = actions.findIndex(a => a.seat === 5 && a.action === "raise");
+    expect(utg1Idx).toBeLessThan(utg2Idx);
+  });
+
+  it("does NOT infer folds for SB or BB (they act later preflop)", () => {
+    // HJ opens — should infer folds for UTG, UTG+1, UTG+2, LJ but NOT SB/BB
+    const hand = makeHand([
+      { seat: 7, position: "HJ", action: "raise", amount: 6 },
+      { seat: 8, position: "CO", action: "fold" },
+      { seat: 9, position: "BTN", action: "fold" },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "call", amount: 6 }
+    ]);
+    const result = HoldemValidator.inferImpliedActions(hand, 9);
+    const folds = result.filter(r => r.action === "fold");
+    const foldSeats = folds.map(f => f.seat);
+    expect(foldSeats).toContain(3); // UTG
+    expect(foldSeats).toContain(4); // UTG+1
+    expect(foldSeats).toContain(5); // UTG+2
+    expect(foldSeats).toContain(6); // LJ
+    expect(foldSeats).not.toContain(1); // SB — acts later
+    expect(foldSeats).not.toContain(2); // BB — acts later
+    expect(folds.length).toBe(4);
+  });
+
+  it("handles 6-max table correctly", () => {
+    // 6-max, button=6: SB=1, BB=2, UTG=3, HJ=4, CO=5, BTN=6
+    const hand = makeHand([
+      { seat: 5, position: "CO", action: "raise", amount: 6 },
+      { seat: 6, position: "BTN", action: "fold" },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "fold" }
+    ], {
+      button: 6,
+      stacks: { 1: 500, 2: 500, 3: 500, 4: 500, 5: 500, 6: 500 }
+    });
+    const result = HoldemValidator.inferImpliedActions(hand, 6);
+    const folds = result.filter(r => r.action === "fold");
+    expect(folds.length).toBe(2); // UTG and HJ
+    expect(folds.map(f => f.seat).sort()).toEqual([3, 4]);
+  });
+
+  it("marks all inferred folds with _inferred: true", () => {
+    const hand = makeHand([
+      { seat: 8, position: "CO", action: "raise", amount: 6 },
+      { seat: 9, position: "BTN", action: "call", amount: 6 },
+      { seat: 1, position: "SB", action: "fold" },
+      { seat: 2, position: "BB", action: "fold" }
+    ]);
+    HoldemValidator.inferImpliedActions(hand, 9);
+    const inferredActions = hand.action_sequence[0].actions.filter(a => a._inferred);
+    expect(inferredActions.length).toBe(5);
+    inferredActions.forEach(a => {
+      expect(a._inferred).toBe(true);
+      expect(a.action).toBe("fold");
+    });
+  });
+});

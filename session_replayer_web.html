@@ -436,6 +436,10 @@
     0%, 100% { box-shadow: 0 0 20px rgba(255,100,100,0.6), 0 0 40px rgba(255,50,50,0.3); }
     50% { box-shadow: 0 0 30px rgba(255,200,50,0.8), 0 0 60px rgba(255,100,50,0.5); }
   }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
 
   /* Big center-table action pop-up */
   .action-popup {
@@ -1266,12 +1270,60 @@
   </div>
   <div style="display:flex; gap:12px; align-items:center; margin-top:8px;">
     <button id="pasteTextBtn" class="demo-btn">Paste Session Notes</button>
+    <button id="recordNotesBtn" class="demo-btn" style="background:#8b2252; font-size:15px;">🎙 Record Notes</button>
     <button id="learnShorthandBtn" class="demo-btn" style="background:#444; font-size:13px;">Teach Shorthand</button>
   </div>
   <div id="sessionLibrary" style="width:min(90%,600px); margin-top:24px;">
     <div id="savedSessionsList"></div>
     <div id="foldersList" style="margin-top:16px;"></div>
   </div>
+</div>
+
+<!-- ============= RECORD SCREEN ============= -->
+<div id="recordScreen" class="screen" style="padding:24px; align-items:center;">
+  <h2 style="font-size:22px; margin-bottom:8px;">🎙 Record Session Notes</h2>
+  <p style="color:var(--text-secondary); max-width:600px; text-align:center; margin-bottom:16px; font-size:14px;">
+    Read your handwritten notes aloud. Your words appear below in real time.<br>
+    Say "next hand" between hands. Click Stop when done.
+  </p>
+  <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; justify-content:center;">
+    <label style="font-size:13px;">Blinds:
+      <input id="recordBlinds" style="width:60px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="2/5" value="2/5">
+    </label>
+    <label style="font-size:13px;">Hero Seat:
+      <select id="recordHeroSeat" style="padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;">
+        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+        <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+      </select>
+    </label>
+    <label style="font-size:13px;">Session Name:
+      <input id="recordSessionName" style="width:200px; padding:4px; background:#2a2a3e; border:1px solid #555; color:#eee; border-radius:4px;" placeholder="Tuesday $2/5">
+    </label>
+  </div>
+  <div id="recordLiveText" style="width:min(90%,700px); min-height:250px; max-height:400px; overflow-y:auto; padding:16px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:14px; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">
+    <span style="color:#666; font-style:italic;">Click Start Recording and read your notes aloud.</span>
+  </div>
+  <div id="recordingIndicator" style="display:none; margin-bottom:12px; font-size:15px; color:#ff4444; font-weight:bold;">
+    <span style="display:inline-block; width:12px; height:12px; background:#ff4444; border-radius:50%; margin-right:8px; animation:pulse-dot 1s infinite;"></span>
+    Recording...
+  </div>
+  <div style="display:flex; gap:12px;">
+    <button id="recordStartBtn" class="demo-btn" style="background:#2d6a4f; font-size:15px; padding:10px 24px;">▶ Start Recording</button>
+    <button id="recordStopBtn" class="demo-btn" style="background:#8b2252; font-size:15px; padding:10px 24px; display:none;">⏹ Stop & Parse</button>
+    <button id="recordBackBtn" class="demo-btn" style="background:#555;">Back</button>
+  </div>
+  <p id="recordStatus" style="margin-top:12px; font-size:13px; color:var(--text-muted);"></p>
+  <details style="margin-top:16px; max-width:500px; color:var(--text-secondary); font-size:13px;">
+    <summary style="cursor:pointer; color:var(--text-muted);">Tips for best results</summary>
+    <ul style="margin-top:8px; padding-left:20px; line-height:1.8;">
+      <li>Say "hand one", "hand two" etc. to mark hand boundaries</li>
+      <li>State positions clearly: "under the gun", "cutoff", "button"</li>
+      <li>Spell out card names: "ace of spades", not just "ace spades"</li>
+      <li>Say "next hand" or "new hand" between hands</li>
+      <li>Speak at a natural pace — pause briefly between hands</li>
+    </ul>
+  </details>
 </div>
 
 <!-- ============= PASTE/PARSE SCREEN ============= -->
@@ -1671,6 +1723,17 @@
     learnResults: document.getElementById("learnResults"),
     learnProfileList: document.getElementById("learnProfileList"),
     learnShorthandBtn: document.getElementById("learnShorthandBtn"),
+    recordNotesBtn: document.getElementById("recordNotesBtn"),
+    recordScreen: document.getElementById("recordScreen"),
+    recordStartBtn: document.getElementById("recordStartBtn"),
+    recordStopBtn: document.getElementById("recordStopBtn"),
+    recordBackBtn: document.getElementById("recordBackBtn"),
+    recordLiveText: document.getElementById("recordLiveText"),
+    recordingIndicator: document.getElementById("recordingIndicator"),
+    recordStatus: document.getElementById("recordStatus"),
+    recordBlinds: document.getElementById("recordBlinds"),
+    recordHeroSeat: document.getElementById("recordHeroSeat"),
+    recordSessionName: document.getElementById("recordSessionName"),
     sessionNameDisplay: document.getElementById("sessionNameDisplay"),
     toggleSidebarBtn: document.getElementById("toggleSidebarBtn"),
     loadNewBtn: document.getElementById("loadNewBtn"),
@@ -1740,6 +1803,7 @@
     els.qaScreen.classList.toggle("active", name === "qa");
     els.reviewScreen.classList.toggle("active", name === "review");
     els.learnScreen.classList.toggle("active", name === "learn");
+    if (els.recordScreen) els.recordScreen.classList.toggle("active", name === "record");
     if (name !== "playback" && playback.equityPanelOpen) {
       closeEquityPanel();
     }
@@ -4074,6 +4138,131 @@
       if (reviewState.sessionData) loadSession(reviewState.sessionData);
     });
 
+    // ---- Voice Recording ----
+    let speechRecognition = null;
+    let recordedTranscript = "";
+    let interimText = "";
+
+    els.recordNotesBtn.addEventListener("click", () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Your browser doesn't support speech recognition. Please use Chrome, Edge, or Safari.");
+        return;
+      }
+      showScreen("record");
+      recordedTranscript = "";
+      interimText = "";
+      els.recordLiveText.innerHTML = '<span style="color:#666; font-style:italic;">Click Start Recording and read your notes aloud.</span>';
+      els.recordStartBtn.style.display = "";
+      els.recordStopBtn.style.display = "none";
+      els.recordingIndicator.style.display = "none";
+      els.recordStatus.textContent = "";
+    });
+
+    els.recordStartBtn.addEventListener("click", () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      speechRecognition = new SpeechRecognition();
+      speechRecognition.continuous = true;
+      speechRecognition.interimResults = true;
+      speechRecognition.lang = "en-US";
+      speechRecognition.maxAlternatives = 1;
+
+      recordedTranscript = "";
+      interimText = "";
+      els.recordLiveText.textContent = "";
+      els.recordStartBtn.style.display = "none";
+      els.recordStopBtn.style.display = "";
+      els.recordingIndicator.style.display = "";
+      els.recordStatus.textContent = "Listening... speak clearly and at a natural pace.";
+
+      speechRecognition.onresult = (event) => {
+        let finalChunk = "";
+        interimText = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalChunk += transcript + " ";
+          } else {
+            interimText = transcript;
+          }
+        }
+        if (finalChunk) recordedTranscript += finalChunk;
+        const d = document.createElement("div");
+        d.textContent = recordedTranscript;
+        const safeMain = d.innerHTML;
+        d.textContent = interimText;
+        const safeInterim = d.innerHTML;
+        els.recordLiveText.innerHTML =
+          '<span style="color:#eee;">' + safeMain + '</span>' +
+          '<span style="color:#888; font-style:italic;">' + safeInterim + '</span>';
+        els.recordLiveText.scrollTop = els.recordLiveText.scrollHeight;
+      };
+
+      speechRecognition.onerror = (event) => {
+        if (event.error === "no-speech") {
+          els.recordStatus.textContent = "No speech detected. Keep talking or click Stop.";
+          return;
+        }
+        if (event.error === "aborted") return;
+        els.recordStatus.textContent = "Mic error: " + event.error + ". Try again.";
+      };
+
+      speechRecognition.onend = () => {
+        if (els.recordStopBtn.style.display !== "none") {
+          try { speechRecognition.start(); } catch (e) { /* ignore */ }
+        }
+      };
+
+      speechRecognition.start();
+    });
+
+    els.recordStopBtn.addEventListener("click", () => {
+      if (speechRecognition) {
+        els.recordStopBtn.style.display = "none";
+        speechRecognition.onend = null;
+        speechRecognition.stop();
+        speechRecognition = null;
+      }
+      els.recordingIndicator.style.display = "none";
+      els.recordStartBtn.style.display = "";
+
+      const fullText = (recordedTranscript + interimText).trim();
+      if (!fullText) {
+        els.recordStatus.textContent = "No speech captured. Try again.";
+        return;
+      }
+
+      els.recordStatus.textContent = "Transcription complete. Sending to AI for parsing...";
+      window._isVoiceInput = true;
+
+      const blindsVal = (els.recordBlinds && els.recordBlinds.value.trim()) || "2/5";
+      const heroVal = (els.recordHeroSeat && els.recordHeroSeat.value) || "1";
+      const nameVal = (els.recordSessionName && els.recordSessionName.value.trim()) || "";
+
+      els.parseBlinds.value = blindsVal;
+      els.parseHeroSeat.value = heroVal;
+      els.parseSessionName.value = nameVal;
+      els.parseTextArea.value = fullText;
+
+      showScreen("parse");
+      els.parseStatus.textContent = "Voice transcription loaded. Click Parse & Load to process with AI.";
+
+      const LA = window.LLMAdapter;
+      if (LA && LA.hasAnyKey()) {
+        els.parseLoadJsonBtn.click();
+      }
+    });
+
+    els.recordBackBtn.addEventListener("click", () => {
+      if (speechRecognition) {
+        speechRecognition.onend = null;
+        speechRecognition.stop();
+        speechRecognition = null;
+      }
+      els.recordingIndicator.style.display = "none";
+      showScreen("upload");
+    });
+
     // Shorthand learner
     els.learnShorthandBtn.addEventListener("click", () => {
       showScreen("learn");
@@ -4549,6 +4738,8 @@
     const blinds = session.blinds || { small: 2, big: 5 };
     const heroSeat = 1;
     const sessionName = (fileName || "session").replace(/\.[^.]+$/, "");
+    const isVoice = !!(window._isVoiceInput);
+    window._isVoiceInput = false; // reset after reading
 
     // Cost estimate
     try {
@@ -4557,64 +4748,96 @@
     } catch (_) {}
 
     const chunks = PP.chunkText(text);
-    const results = [];
-    const knownPlayers = {};
+    const totalChunks = chunks.length;
 
-    els.parseStatus.textContent = chunks.length > 1
-      ? `Parsing with AI (chunk 1 of ${chunks.length})...`
-      : "Parsing with AI...";
+    // Pre-scan for player hints (available to all parallel chunks)
+    const playerHints = PP.extractPlayerHints ? PP.extractPlayerHints(text) : "";
 
-    for (let i = 0; i < chunks.length; i++) {
-      if (chunks.length > 1) {
-        els.parseStatus.textContent = `Parsing chunk ${i + 1} of ${chunks.length}...`;
-      }
+    if (totalChunks === 1) {
+      els.parseStatus.textContent = "Parsing with AI...";
+    } else {
+      els.parseStatus.textContent = `Parsing ${totalChunks} chunks in parallel...`;
+    }
+
+    // Build task functions for parallel execution
+    let completed = 0;
+    const taskFns = chunks.map((chunk, i) => () => {
       const userMessage = PP.buildUserMessage({
-        text: chunks[i],
+        text: chunk,
         blinds,
         heroSeat,
         sessionName,
-        knownPlayers,
-        chunkIndex: i
+        playerHints,
+        chunkIndex: i,
+        totalChunks,
+        isVoiceInput: isVoice
       });
-      let res;
-      try {
-        res = await LA.callLLM({
-          provider: keyInfo.provider,
-          apiKey: keyInfo.apiKey,
-          model: keyInfo.model,
-          endpoint: keyInfo.endpoint,
-          systemPrompt: PP.SYSTEM_PROMPT,
-          userMessage
-        });
-      } catch (err) {
-        console.warn("[AI Parse] callLLM threw:", err);
-        return false;
-      }
-      if (!res || !res.success) {
-        console.warn("[AI Parse] call failed:", res && res.error);
-        return false;
-      }
-      const parsed = PP.extractJSON(res.text);
-      if (!parsed) {
-        console.warn("[AI Parse] could not extract JSON from response");
-        return false;
-      }
-      results.push(parsed);
-      // Accumulate known players for next chunk
-      if (parsed.players) {
-        for (const [seat, p] of Object.entries(parsed.players)) {
-          if (!knownPlayers[seat]) knownPlayers[seat] = p;
+      const callFn = LA.callLLMWithRetry || LA.callLLM;
+      return callFn({
+        provider: keyInfo.provider,
+        apiKey: keyInfo.apiKey,
+        model: keyInfo.model,
+        endpoint: keyInfo.endpoint,
+        systemPrompt: PP.SYSTEM_PROMPT,
+        userMessage,
+        maxTokens: 8192
+      }).then(res => {
+        completed++;
+        if (totalChunks > 1) {
+          els.parseStatus.textContent = `Parsed ${completed} of ${totalChunks} chunks...`;
         }
-      }
+        return { index: i, result: res };
+      });
+    });
+
+    // Execute with concurrency limit (4 parallel max)
+    let settled;
+    try {
+      const limitFn = LA.parallelWithLimit || function(fns) { return Promise.all(fns.map(fn => fn().then(v => ({status:"fulfilled",value:v}), e => ({status:"rejected",reason:e})))); };
+      settled = await limitFn(taskFns, 4);
+    } catch (err) {
+      console.warn("[AI Parse] parallel execution error:", err);
+      return false;
     }
 
-    const merged = PP.mergeParsedResults(results);
+    // Collect results, sorted by chunk index
+    const parsedResults = [];
+    const failures = [];
+    for (const item of settled) {
+      if (item.status === "rejected" || !item.value || !item.value.result || !item.value.result.success) {
+        const idx = item.value ? item.value.index : "?";
+        console.warn(`[AI Parse] chunk ${idx} failed:`, item.value && item.value.result && item.value.result.error);
+        failures.push(idx);
+        continue;
+      }
+      const parsed = PP.extractJSON(item.value.result.text);
+      if (!parsed) {
+        console.warn(`[AI Parse] chunk ${item.value.index}: could not extract JSON`);
+        failures.push(item.value.index);
+        continue;
+      }
+      parsedResults.push({ index: item.value.index, data: parsed });
+    }
+
+    if (parsedResults.length === 0) {
+      console.warn("[AI Parse] all chunks failed");
+      return false;
+    }
+
+    // Sort by original chunk order before merging
+    parsedResults.sort((a, b) => a.index - b.index);
+
+    const merged = PP.mergeParsedResults(parsedResults.map(r => r.data));
     if (!PP.isValidSessionShape(merged)) {
       console.warn("[AI Parse] merged result not valid session shape");
       return false;
     }
     const handCount = (merged.hands || []).length;
-    els.parseStatus.textContent = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    let statusMsg = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    if (failures.length > 0) {
+      statusMsg += ` (${failures.length} chunk${failures.length === 1 ? "" : "s"} failed — partial results)`;
+    }
+    els.parseStatus.textContent = statusMsg;
     // Store original input text for export
     merged._originalInput = text;
     startQA(merged);

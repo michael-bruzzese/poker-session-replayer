@@ -458,6 +458,48 @@ const LLMAdapter = (() => {
     return null;
   }
 
+  // ---- Retry Wrapper ----
+
+  async function callLLMWithRetry(opts, retries) {
+    retries = retries != null ? retries : 3;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const res = await callLLM(opts);
+      if (res.success) return res;
+      // Retry on rate limits (429) or server errors (5xx)
+      if ((res.status === 429 || (res.status >= 500 && res.status < 600)) && attempt < retries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return res; // Non-retryable error or max retries reached
+    }
+  }
+
+  // ---- Parallel Execution with Concurrency Limit ----
+
+  async function parallelWithLimit(taskFns, limit) {
+    limit = limit || 4;
+    const results = new Array(taskFns.length);
+    let nextIdx = 0;
+
+    async function runNext() {
+      while (nextIdx < taskFns.length) {
+        const idx = nextIdx++;
+        results[idx] = await taskFns[idx]().then(
+          val => ({ status: "fulfilled", value: val }),
+          err => ({ status: "rejected", reason: err })
+        );
+      }
+    }
+
+    const workers = [];
+    for (let i = 0; i < Math.min(limit, taskFns.length); i++) {
+      workers.push(runNext());
+    }
+    await Promise.all(workers);
+    return results;
+  }
+
   // ---- Public API ----
 
   return {
@@ -492,6 +534,10 @@ const LLMAdapter = (() => {
     getKeyForProvider,
     hasAnyKey,
     getPrimaryKey,
+
+    // Retry + parallel
+    callLLMWithRetry,
+    parallelWithLimit,
 
     // Error mapping (for testing)
     mapError

@@ -1284,7 +1284,7 @@
   <h2 style="font-size:22px; margin-bottom:8px;">🎙 Record Session Notes</h2>
   <p style="color:var(--text-secondary); max-width:600px; text-align:center; margin-bottom:16px; font-size:14px;">
     Read your handwritten notes aloud. Your words appear below in real time.<br>
-    Speak naturally — say "next hand" between hands. Click Stop when done.
+    Say "next hand" between hands. Click Stop when done.
   </p>
   <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; justify-content:center;">
     <label style="font-size:13px;">Blinds:
@@ -1302,7 +1302,7 @@
     </label>
   </div>
   <div id="recordLiveText" style="width:min(90%,700px); min-height:250px; max-height:400px; overflow-y:auto; padding:16px; background:#1e1e2e; border:1px solid #444; color:#eee; border-radius:8px; font-family:monospace; font-size:14px; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">
-    <span style="color:#666; font-style:italic;">Waiting to start recording...</span>
+    <span style="color:#666; font-style:italic;">Click Start Recording and read your notes aloud.</span>
   </div>
   <div id="recordingIndicator" style="display:none; margin-bottom:12px; font-size:15px; color:#ff4444; font-weight:bold;">
     <span style="display:inline-block; width:12px; height:12px; background:#ff4444; border-radius:50%; margin-right:8px; animation:pulse-dot 1s infinite;"></span>
@@ -1314,6 +1314,16 @@
     <button id="recordBackBtn" class="demo-btn" style="background:#555;">Back</button>
   </div>
   <p id="recordStatus" style="margin-top:12px; font-size:13px; color:var(--text-muted);"></p>
+  <details style="margin-top:16px; max-width:500px; color:var(--text-secondary); font-size:13px;">
+    <summary style="cursor:pointer; color:var(--text-muted);">Tips for best results</summary>
+    <ul style="margin-top:8px; padding-left:20px; line-height:1.8;">
+      <li>Say "hand one", "hand two" etc. to mark hand boundaries</li>
+      <li>State positions clearly: "under the gun", "cutoff", "button"</li>
+      <li>Spell out card names: "ace of spades", not just "ace spades"</li>
+      <li>Say "next hand" or "new hand" between hands</li>
+      <li>Speak at a natural pace — pause briefly between hands</li>
+    </ul>
+  </details>
 </div>
 
 <!-- ============= PASTE/PARSE SCREEN ============= -->
@@ -3294,11 +3304,23 @@ const HoldemValidator = (() => {
    * Mutates the hand object in place. Returns a list of inferred actions for logging.
    *
    * Rules:
-   * 1. Postflop: if a street's first action is a bet/raise but there are active players
+   * 1. Preflop: if the first voluntary action is from a late position, insert folds for all
+   *    earlier positions (excluding SB/BB who act later). Also fills mid-sequence gaps.
+   * 2. Postflop: if a street's first action is a bet/raise but there are active players
    *    who should have acted before the bettor (based on button_seat), insert checks for them.
-   * 2. Preflop BB option: if action reaches BB with no raise beyond the big blind,
+   * 3. Preflop BB option: if action reaches BB with no raise beyond the big blind,
    *    and BB doesn't have an explicit action, insert a check (BB exercises option).
    */
+
+  /** Map a seat number to its position label given the button seat. */
+  function _positionLabel(seat, buttonSeat, seatCount) {
+    const positions9 = ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO"];
+    const positions6 = ["BTN", "SB", "BB", "UTG", "HJ", "CO"];
+    const positions = seatCount <= 6 ? positions6 : positions9;
+    const idx = ((seat - buttonSeat + seatCount) % seatCount);
+    return positions[idx] || "S" + seat;
+  }
+
   function inferImpliedActions(hand, seatCount) {
     seatCount = seatCount || 9;
     const inferred = [];
@@ -3311,7 +3333,7 @@ const HoldemValidator = (() => {
 
     for (const streetBlock of (hand.action_sequence || [])) {
       const street = streetBlock.street;
-      const actions = streetBlock.actions || [];
+      let actions = streetBlock.actions || [];
       if (!actions.length) continue;
 
       if (street !== "preflop") {
@@ -3363,6 +3385,90 @@ const HoldemValidator = (() => {
             }
             // Insert at the beginning
             streetBlock.actions = [...checksToInsert, ...actions];
+          }
+        }
+      }
+
+      // Preflop: infer missing folds for seats that should have acted
+      if (street === "preflop") {
+        const sbSeat = ((buttonSeat - 1 + 1) % seatCount) + 1;
+        const bbSeat2 = ((buttonSeat - 1 + 2) % seatCount) + 1;
+
+        // Build full preflop order (UTG first, BB last) for all possible seats
+        const allSeats = new Set();
+        for (const sb of (hand.action_sequence || [])) {
+          for (const a of (sb.actions || [])) {
+            if (a.seat >= 1 && a.seat <= seatCount) allSeats.add(a.seat);
+          }
+        }
+        // Also include hero and stacks seats
+        if (hand.hero_seat) allSeats.add(hand.hero_seat);
+        for (const s of Object.keys(hand.stacks || {})) {
+          const sn = parseInt(s, 10);
+          if (sn >= 1 && sn <= seatCount) allSeats.add(sn);
+        }
+
+        const preflopOrder = buildExpectedOrder(buttonSeat, seatCount, "preflop", allSeats);
+        const explicitSeats = new Set(actions.map(a => a.seat));
+
+        // Find the first voluntary action (not an inferred action)
+        const firstVoluntaryIdx = actions.findIndex(a => !a._inferred);
+        if (firstVoluntaryIdx >= 0) {
+          const firstActionSeat = actions[firstVoluntaryIdx].seat;
+          const firstPosIdx = preflopOrder.indexOf(firstActionSeat);
+
+          if (firstPosIdx > 0) {
+            // Insert folds for all seats before the first actor that have no explicit action
+            const foldsToInsert = [];
+            for (let i = 0; i < firstPosIdx; i++) {
+              const seat = preflopOrder[i];
+              if (seat === sbSeat || seat === bbSeat2) continue; // SB/BB act later
+              if (explicitSeats.has(seat)) continue; // already has an action
+              if (globalFolded.has(seat)) continue; // already folded in prior logic
+
+              const position = _positionLabel(seat, buttonSeat, seatCount);
+              foldsToInsert.push({ seat, position, action: "fold", _inferred: true });
+              inferred.push({ street: "preflop", seat, position, action: "fold" });
+              globalFolded.add(seat);
+            }
+            if (foldsToInsert.length > 0) {
+              streetBlock.actions = [...foldsToInsert, ...actions];
+              // Refresh actions reference
+              actions = streetBlock.actions;
+            }
+          }
+
+          // Second pass: handle mid-sequence gaps (e.g., UTG folds, [missing UTG+1], UTG+2 raises)
+          const updatedExplicit = new Set(actions.map(a => a.seat));
+          const insertions = []; // {beforeIndex, foldAction}
+          for (let oi = 0; oi < preflopOrder.length; oi++) {
+            const seat = preflopOrder[oi];
+            if (seat === sbSeat || seat === bbSeat2) continue;
+            if (updatedExplicit.has(seat)) continue;
+            if (globalFolded.has(seat)) continue;
+            // Check if any later seat in the order has an action
+            const laterActed = preflopOrder.slice(oi + 1).some(ls => updatedExplicit.has(ls) && ls !== sbSeat && ls !== bbSeat2);
+            if (laterActed) {
+              const position = _positionLabel(seat, buttonSeat, seatCount);
+              // Find where to insert: before the first action from a later-order seat
+              let insertIdx = actions.length;
+              for (let ai = 0; ai < actions.length; ai++) {
+                const aiOrderIdx = preflopOrder.indexOf(actions[ai].seat);
+                if (aiOrderIdx > oi) { insertIdx = ai; break; }
+              }
+              insertions.push({
+                idx: insertIdx,
+                action: { seat, position, action: "fold", _inferred: true }
+              });
+              inferred.push({ street: "preflop", seat, position, action: "fold" });
+              globalFolded.add(seat);
+              updatedExplicit.add(seat); // prevent re-processing
+            }
+          }
+          // Apply insertions in reverse order so indices don't shift
+          insertions.sort((a, b) => b.idx - a.idx);
+          for (const ins of insertions) {
+            streetBlock.actions.splice(ins.idx, 0, ins.action);
           }
         }
       }
@@ -5236,11 +5342,11 @@ const LLMAdapter = (() => {
   // Approximate per-token costs (USD, input tokens). Update as providers change pricing.
   // These are used ONLY for honest cost estimates — do not hide costs.
   const COST_PER_1K_INPUT_TOKENS = {
-    anthropic: { "claude-opus-4-6": 0.003, default: 0.003 },
+    anthropic: { "claude-sonnet-4-6": 0.003, default: 0.003 },
     openai: { "gpt-4o": 0.0025, default: 0.0025 }
   };
   const COST_PER_1K_OUTPUT_TOKENS = {
-    anthropic: { "claude-opus-4-6": 0.015, default: 0.015 },
+    anthropic: { "claude-sonnet-4-6": 0.015, default: 0.015 },
     openai: { "gpt-4o": 0.01, default: 0.01 }
   };
 
@@ -5291,6 +5397,7 @@ const LLMAdapter = (() => {
     }
     if (status === 401) return "Invalid API key. Check that you copied the full key.";
     if (status === 403) return "API key doesn't have permission for this model.";
+    if (status === 404) return "API endpoint not found. If using Anthropic, check that your key starts with sk-ant- and billing is active at console.anthropic.com/settings/billing";
     if (status === 429) return "Rate limited. Wait a moment and try again.";
     if (status === 413) return "Request too large. Try shortening your notes.";
     if (status === 400) {
@@ -5447,7 +5554,7 @@ const LLMAdapter = (() => {
         "anthropic-dangerous-direct-browser-access": "true"
       };
       body = JSON.stringify({
-        model: model || "claude-opus-4-6",
+        model: model || "claude-sonnet-4-6",
         max_tokens: maxTokens || 8192,
         system: systemPrompt,
         messages: [{
@@ -5680,6 +5787,48 @@ const LLMAdapter = (() => {
     return null;
   }
 
+  // ---- Retry Wrapper ----
+
+  async function callLLMWithRetry(opts, retries) {
+    retries = retries != null ? retries : 3;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const res = await callLLM(opts);
+      if (res.success) return res;
+      // Retry on rate limits (429) or server errors (5xx)
+      if ((res.status === 429 || (res.status >= 500 && res.status < 600)) && attempt < retries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return res; // Non-retryable error or max retries reached
+    }
+  }
+
+  // ---- Parallel Execution with Concurrency Limit ----
+
+  async function parallelWithLimit(taskFns, limit) {
+    limit = limit || 4;
+    const results = new Array(taskFns.length);
+    let nextIdx = 0;
+
+    async function runNext() {
+      while (nextIdx < taskFns.length) {
+        const idx = nextIdx++;
+        results[idx] = await taskFns[idx]().then(
+          val => ({ status: "fulfilled", value: val }),
+          err => ({ status: "rejected", reason: err })
+        );
+      }
+    }
+
+    const workers = [];
+    for (let i = 0; i < Math.min(limit, taskFns.length); i++) {
+      workers.push(runNext());
+    }
+    await Promise.all(workers);
+    return results;
+  }
+
   // ---- Public API ----
 
   return {
@@ -5714,6 +5863,10 @@ const LLMAdapter = (() => {
     getKeyForProvider,
     hasAnyKey,
     getPrimaryKey,
+
+    // Retry + parallel
+    callLLMWithRetry,
+    parallelWithLimit,
 
     // Error mapping (for testing)
     mapError
@@ -5841,7 +5994,7 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
    - If stack sizes aren't mentioned, use default of 100 big blinds per player
    - If the button position isn't explicit, infer from described positions
 
-7. **Preflop folds**: Include all fold actions explicitly. If "folds around to the button", that means all seats between UTG and the button fold. Include each as a separate fold action with the correct seat number.
+7. **Preflop folds**: Include ALL fold actions explicitly — even implied ones. If a player "opens in the cutoff", that means UTG, UTG+1, UTG+2, LJ, and HJ all folded before the CO acted. If "folds around to the button", all seats between UTG and the button fold. Include each fold as a separate action with the correct seat number. NEVER skip fold actions — the replayer needs every seat's action to animate correctly.
 
 8. **Result**: Determine the winner based on the action (last player standing after folds, or showdown winner if described).
 
@@ -5855,6 +6008,13 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
 11. **Player descriptions**: If the user describes players ("the tight guy in seat 3", "Dave is a LAG"), capture these in the players object.
 
+12. **Voice transcription tolerance**: If the input appears to be voice-transcribed (natural speech, run-on sentences, filler words), apply extra tolerance for misheard poker terms:
+   - Positions: "under the gun", "cut off"/"cutoff", "low jack"/"lojack", "high jack"/"hijack"
+   - Actions: "check raise"/"check race", "three bet"/"tree bet", "c-bet"/"continuation bet", "all in"/"all and"
+   - Cards: "ace"/"eight" (use context), "ten"/"tin", "deuce"/"juice"
+   - Suits: "spades"/"space", "hearts"/"arts", "clubs"/"cloves"
+   - Boundaries: "next hand", "new hand", "okay so" may mark hand transitions
+
 ## Important
 
 - Return ONLY the JSON object. No markdown code fences, no explanation text.
@@ -5866,13 +6026,21 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
   // ---- Context Message Builder ----
 
-  function buildUserMessage({ text, blinds, heroSeat, sessionName, knownPlayers, chunkIndex }) {
+  function buildUserMessage({ text, blinds, heroSeat, sessionName, knownPlayers, playerHints, chunkIndex, totalChunks, isVoiceInput }) {
     const parts = [];
-    if (chunkIndex && chunkIndex > 0) {
+    if (totalChunks && totalChunks > 1) {
+      parts.push(`[This is chunk ${(chunkIndex || 0) + 1} of ${totalChunks} from a single session. Maintain consistent seat numbering across all hands.]`);
+    } else if (chunkIndex && chunkIndex > 0) {
       parts.push(`[Continuing from previous chunk. Maintain consistent seat numbering.]`);
-      if (knownPlayers && Object.keys(knownPlayers).length > 0) {
-        parts.push(`[Known players from earlier: ${JSON.stringify(knownPlayers)}]`);
-      }
+    }
+    if (knownPlayers && Object.keys(knownPlayers).length > 0) {
+      parts.push(`[Known players: ${JSON.stringify(knownPlayers)}]`);
+    }
+    if (playerHints) {
+      parts.push(`[Player info from session: ${playerHints}]`);
+    }
+    if (isVoiceInput) {
+      parts.push(`[NOTE: This text was captured via voice recognition and may contain speech-to-text errors. Apply extra tolerance for misheard poker terms.]`);
     }
     if (sessionName) parts.push(`[Session name: ${sessionName}]`);
     if (blinds) parts.push(`[Session blinds: $${blinds.small}/$${blinds.big}]`);
@@ -5880,6 +6048,32 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
 
     const context = parts.length > 0 ? parts.join("\n") + "\n\n" : "";
     return context + text;
+  }
+
+  // ---- Player Hint Extraction (pre-scan for parallel parsing) ----
+
+  function extractPlayerHints(text) {
+    if (!text) return "";
+    const hints = [];
+    // "seat N is NAME" / "NAME in seat N"
+    const seatNamePattern = /\bseat\s*(\d)\s*(?:is|:)\s*([A-Za-z][A-Za-z\s]{1,20})/gi;
+    for (const m of text.matchAll(seatNamePattern)) {
+      hints.push(`Seat ${m[1]}: ${m[2].trim()}`);
+    }
+    // "the [adjective] guy/player" descriptions
+    const descPattern = /\b(the\s+(?:tight|loose|aggro|passive|old|young|big|quiet|loud|drunk|nitty|laggy|maniac)\s+(?:guy|player|man|woman|dude|kid|reg|fish))/gi;
+    for (const m of text.matchAll(descPattern)) {
+      if (!hints.includes(m[1])) hints.push(m[1]);
+    }
+    // Named players: "NAME opens" / "NAME raises" / "NAME calls"
+    const namedPattern = /\b([A-Z][a-z]{2,12})\s+(?:opens?|raises?|calls?|folds?|bets?|checks?|jams?|limps?|straddles?)\b/g;
+    for (const m of text.matchAll(namedPattern)) {
+      const name = m[1];
+      // Skip common false positives
+      if (["Hand", "Hero", "Seat", "Board", "Flop", "Turn", "River", "Pot", "Button"].includes(name)) continue;
+      if (!hints.some(h => h.includes(name))) hints.push(`Player: ${name}`);
+    }
+    return hints.join("; ");
   }
 
   // ---- Chunking ----
@@ -5894,10 +6088,28 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
     const handPattern = /(?=\bhand\s*#?\s*\d+\b)/gi;
     const matches = [...text.matchAll(handPattern)];
 
-    // If no hand boundaries found, fall back to double-newline
+    // If no "Hand N" boundaries found, try voice-friendly boundaries
     if (matches.length <= 1) {
+      const voicePattern = /(?=\b(?:next hand|new hand|new deal|okay so next|alright (?:so )?next|moving on to|okay hand|hand number)\b)/gi;
+      const voiceMatches = [...text.matchAll(voicePattern)];
+      if (voiceMatches.length > 1) {
+        const vSplitPoints = [0, ...voiceMatches.map(m => m.index).filter(i => i > 0)];
+        const vChunks = [];
+        for (let i = 0; i < vSplitPoints.length; i++) {
+          const start = vSplitPoints[i];
+          const end = i + 1 < vSplitPoints.length ? vSplitPoints[i + 1] : text.length;
+          vChunks.push(text.slice(start, end));
+        }
+        return mergeSmallChunks(vChunks, maxChars);
+      }
+
+      // Fall back to double-newline
       const nlChunks = text.split(/\n\s*\n/).filter(c => c.trim().length > 0);
-      return mergeSmallChunks(nlChunks, maxChars);
+      if (nlChunks.length > 1) return mergeSmallChunks(nlChunks, maxChars);
+
+      // Last resort: split at sentence boundaries for oversized single blocks
+      const sentenceChunks = text.split(/(?<=\.)\s+/).filter(c => c.trim().length > 0);
+      return mergeSmallChunks(sentenceChunks, maxChars);
     }
 
     // Split at hand boundaries
@@ -6020,7 +6232,8 @@ All bet/raise amounts are TOTAL STREET COMMITMENT (the "to" amount, not the addi
     mergeParsedResults,
     isValidSessionShape,
     IMAGE_PARSE_PROMPT,
-    extractTranscription
+    extractTranscription,
+    extractPlayerHints
   };
 })();
 
@@ -9728,7 +9941,6 @@ if (typeof module !== "undefined" && module.exports) {
     let interimText = "";
 
     els.recordNotesBtn.addEventListener("click", () => {
-      // Check browser support
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         alert("Your browser doesn't support speech recognition. Please use Chrome, Edge, or Safari.");
@@ -9771,13 +9983,15 @@ if (typeof module !== "undefined" && module.exports) {
             interimText = transcript;
           }
         }
-        if (finalChunk) {
-          recordedTranscript += finalChunk;
-        }
+        if (finalChunk) recordedTranscript += finalChunk;
+        const d = document.createElement("div");
+        d.textContent = recordedTranscript;
+        const safeMain = d.innerHTML;
+        d.textContent = interimText;
+        const safeInterim = d.innerHTML;
         els.recordLiveText.innerHTML =
-          '<span style="color:#eee;">' + escapeHtml(recordedTranscript) + '</span>' +
-          '<span style="color:#888; font-style:italic;">' + escapeHtml(interimText) + '</span>';
-        // Auto-scroll to bottom
+          '<span style="color:#eee;">' + safeMain + '</span>' +
+          '<span style="color:#888; font-style:italic;">' + safeInterim + '</span>';
         els.recordLiveText.scrollTop = els.recordLiveText.scrollHeight;
       };
 
@@ -9788,11 +10002,9 @@ if (typeof module !== "undefined" && module.exports) {
         }
         if (event.error === "aborted") return;
         els.recordStatus.textContent = "Mic error: " + event.error + ". Try again.";
-        console.warn("SpeechRecognition error:", event.error);
       };
 
       speechRecognition.onend = () => {
-        // Auto-restart if we haven't explicitly stopped (browser kills it after silence)
         if (els.recordStopBtn.style.display !== "none") {
           try { speechRecognition.start(); } catch (e) { /* ignore */ }
         }
@@ -9803,7 +10015,6 @@ if (typeof module !== "undefined" && module.exports) {
 
     els.recordStopBtn.addEventListener("click", () => {
       if (speechRecognition) {
-        // Prevent auto-restart
         els.recordStopBtn.style.display = "none";
         speechRecognition.onend = null;
         speechRecognition.stop();
@@ -9819,8 +10030,8 @@ if (typeof module !== "undefined" && module.exports) {
       }
 
       els.recordStatus.textContent = "Transcription complete. Sending to AI for parsing...";
+      window._isVoiceInput = true;
 
-      // Transfer to parse screen with metadata
       const blindsVal = (els.recordBlinds && els.recordBlinds.value.trim()) || "2/5";
       const heroVal = (els.recordHeroSeat && els.recordHeroSeat.value) || "1";
       const nameVal = (els.recordSessionName && els.recordSessionName.value.trim()) || "";
@@ -9833,7 +10044,6 @@ if (typeof module !== "undefined" && module.exports) {
       showScreen("parse");
       els.parseStatus.textContent = "Voice transcription loaded. Click Parse & Load to process with AI.";
 
-      // Auto-trigger parse if AI key is available
       const LA = window.LLMAdapter;
       if (LA && LA.hasAnyKey()) {
         els.parseLoadJsonBtn.click();
@@ -9849,12 +10059,6 @@ if (typeof module !== "undefined" && module.exports) {
       els.recordingIndicator.style.display = "none";
       showScreen("upload");
     });
-
-    function escapeHtml(text) {
-      const d = document.createElement("div");
-      d.textContent = text;
-      return d.innerHTML;
-    }
 
     // Shorthand learner
     els.learnShorthandBtn.addEventListener("click", () => {
@@ -10331,6 +10535,8 @@ if (typeof module !== "undefined" && module.exports) {
     const blinds = session.blinds || { small: 2, big: 5 };
     const heroSeat = 1;
     const sessionName = (fileName || "session").replace(/\.[^.]+$/, "");
+    const isVoice = !!(window._isVoiceInput);
+    window._isVoiceInput = false; // reset after reading
 
     // Cost estimate
     try {
@@ -10339,64 +10545,96 @@ if (typeof module !== "undefined" && module.exports) {
     } catch (_) {}
 
     const chunks = PP.chunkText(text);
-    const results = [];
-    const knownPlayers = {};
+    const totalChunks = chunks.length;
 
-    els.parseStatus.textContent = chunks.length > 1
-      ? `Parsing with AI (chunk 1 of ${chunks.length})...`
-      : "Parsing with AI...";
+    // Pre-scan for player hints (available to all parallel chunks)
+    const playerHints = PP.extractPlayerHints ? PP.extractPlayerHints(text) : "";
 
-    for (let i = 0; i < chunks.length; i++) {
-      if (chunks.length > 1) {
-        els.parseStatus.textContent = `Parsing chunk ${i + 1} of ${chunks.length}...`;
-      }
+    if (totalChunks === 1) {
+      els.parseStatus.textContent = "Parsing with AI...";
+    } else {
+      els.parseStatus.textContent = `Parsing ${totalChunks} chunks in parallel...`;
+    }
+
+    // Build task functions for parallel execution
+    let completed = 0;
+    const taskFns = chunks.map((chunk, i) => () => {
       const userMessage = PP.buildUserMessage({
-        text: chunks[i],
+        text: chunk,
         blinds,
         heroSeat,
         sessionName,
-        knownPlayers,
-        chunkIndex: i
+        playerHints,
+        chunkIndex: i,
+        totalChunks,
+        isVoiceInput: isVoice
       });
-      let res;
-      try {
-        res = await LA.callLLM({
-          provider: keyInfo.provider,
-          apiKey: keyInfo.apiKey,
-          model: keyInfo.model,
-          endpoint: keyInfo.endpoint,
-          systemPrompt: PP.SYSTEM_PROMPT,
-          userMessage
-        });
-      } catch (err) {
-        console.warn("[AI Parse] callLLM threw:", err);
-        return false;
-      }
-      if (!res || !res.success) {
-        console.warn("[AI Parse] call failed:", res && res.error);
-        return false;
-      }
-      const parsed = PP.extractJSON(res.text);
-      if (!parsed) {
-        console.warn("[AI Parse] could not extract JSON from response");
-        return false;
-      }
-      results.push(parsed);
-      // Accumulate known players for next chunk
-      if (parsed.players) {
-        for (const [seat, p] of Object.entries(parsed.players)) {
-          if (!knownPlayers[seat]) knownPlayers[seat] = p;
+      const callFn = LA.callLLMWithRetry || LA.callLLM;
+      return callFn({
+        provider: keyInfo.provider,
+        apiKey: keyInfo.apiKey,
+        model: keyInfo.model,
+        endpoint: keyInfo.endpoint,
+        systemPrompt: PP.SYSTEM_PROMPT,
+        userMessage,
+        maxTokens: 8192
+      }).then(res => {
+        completed++;
+        if (totalChunks > 1) {
+          els.parseStatus.textContent = `Parsed ${completed} of ${totalChunks} chunks...`;
         }
-      }
+        return { index: i, result: res };
+      });
+    });
+
+    // Execute with concurrency limit (4 parallel max)
+    let settled;
+    try {
+      const limitFn = LA.parallelWithLimit || function(fns) { return Promise.all(fns.map(fn => fn().then(v => ({status:"fulfilled",value:v}), e => ({status:"rejected",reason:e})))); };
+      settled = await limitFn(taskFns, 4);
+    } catch (err) {
+      console.warn("[AI Parse] parallel execution error:", err);
+      return false;
     }
 
-    const merged = PP.mergeParsedResults(results);
+    // Collect results, sorted by chunk index
+    const parsedResults = [];
+    const failures = [];
+    for (const item of settled) {
+      if (item.status === "rejected" || !item.value || !item.value.result || !item.value.result.success) {
+        const idx = item.value ? item.value.index : "?";
+        console.warn(`[AI Parse] chunk ${idx} failed:`, item.value && item.value.result && item.value.result.error);
+        failures.push(idx);
+        continue;
+      }
+      const parsed = PP.extractJSON(item.value.result.text);
+      if (!parsed) {
+        console.warn(`[AI Parse] chunk ${item.value.index}: could not extract JSON`);
+        failures.push(item.value.index);
+        continue;
+      }
+      parsedResults.push({ index: item.value.index, data: parsed });
+    }
+
+    if (parsedResults.length === 0) {
+      console.warn("[AI Parse] all chunks failed");
+      return false;
+    }
+
+    // Sort by original chunk order before merging
+    parsedResults.sort((a, b) => a.index - b.index);
+
+    const merged = PP.mergeParsedResults(parsedResults.map(r => r.data));
     if (!PP.isValidSessionShape(merged)) {
       console.warn("[AI Parse] merged result not valid session shape");
       return false;
     }
     const handCount = (merged.hands || []).length;
-    els.parseStatus.textContent = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    let statusMsg = `Parse complete. ${handCount} hand${handCount === 1 ? "" : "s"} found.`;
+    if (failures.length > 0) {
+      statusMsg += ` (${failures.length} chunk${failures.length === 1 ? "" : "s"} failed — partial results)`;
+    }
+    els.parseStatus.textContent = statusMsg;
     // Store original input text for export
     merged._originalInput = text;
     startQA(merged);
